@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.config.MinioBucketConfig;
 import org.example.miniodemo.config.MinioConfig;
 import org.example.miniodemo.controller.PublicAssetController;
+import org.example.miniodemo.dto.FileDetailDto;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -77,10 +78,10 @@ public class PublicAssetService {
     /**
      * 获取公共存储桶中所有文件的列表，并为每个文件生成可直接访问的URL。
      *
-     * @return 包含文件信息的Map列表。每个Map包含 "name" (对象名) 和 "url" (完整公开URL)。
+     * @return 包含文件信息的DTO列表。
      * @throws Exception 如果与MinIO服务器通信时发生错误。
      */
-    public List<Map<String, Object>> listPublicFiles() throws Exception {
+    public List<FileDetailDto> listPublicFiles() throws Exception {
         Iterable<Result<Item>> results = minioClient.listObjects(
                 ListObjectsArgs.builder().bucket(bucketConfig.getPublicAssets()).recursive(true).build()
         );
@@ -96,12 +97,12 @@ public class PublicAssetService {
                         // 从对象路径中提取原始文件名
                         String originalName = objectName.substring(objectName.lastIndexOf('/') + 1);
 
-                        Map<String, Object> fileInfo = new HashMap<>();
-                        fileInfo.put("name", originalName); // name现在是解析出来的原始文件名
-                        fileInfo.put("hashName", objectName); // hashName现在是完整的对象路径
-                        fileInfo.put("url", baseUrl + objectName);
-
-                        return fileInfo;
+                        return FileDetailDto.builder()
+                                .name(originalName)
+                                .path(objectName)
+                                .size(item.size())
+                                .url(baseUrl + objectName)
+                                .build();
                     } catch (Exception e) {
                         log.error("获取公共文件 '{}' 信息失败", itemResult.toString(), e);
                         return null;

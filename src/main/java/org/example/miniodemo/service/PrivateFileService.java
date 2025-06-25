@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.config.MinioBucketConfig;
 import org.example.miniodemo.controller.PrivateFileController;
+import org.example.miniodemo.dto.FileDetailDto;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -78,10 +79,10 @@ public class PrivateFileService {
      * 此方法会过滤掉分片上传过程中产生的临时文件。
      * 它会从文件的完整对象路径中解析出原始文件名。
      *
-     * @return 文件信息列表，每个Map包含 "name" (原始文件名) 和 "size"。
+     * @return 文件信息DTO列表，每个DTO包含 "name", "path", "size"
      * @throws MinioException 如果发生MinIO相关错误。
      */
-    public List<Map<String, Object>> listPrivateFiles() throws MinioException {
+    public List<FileDetailDto> listPrivateFiles() throws MinioException {
         try {
             Iterable<Result<Item>> results = minioClient.listObjects(ListObjectsArgs.builder()
                     .bucket(bucketConfig.getPrivateFiles())
@@ -107,11 +108,11 @@ public class PrivateFileService {
                             // 从对象路径中提取原始文件名
                             String originalName = objectName.substring(objectName.lastIndexOf('/') + 1);
 
-                            Map<String, Object> fileInfo = new HashMap<>();
-                            fileInfo.put("name", originalName); // 返回原始文件名
-                            fileInfo.put("hashName", objectName); // 返回完整的对象路径
-                            fileInfo.put("size", item.size());
-                            return fileInfo;
+                            return FileDetailDto.builder()
+                                    .name(originalName)
+                                    .path(objectName)
+                                    .size(item.size())
+                                    .build(); // 私有文件不生成URL
                         } catch (Exception e) {
                             log.error("解析对象 '{}' 信息失败", item.objectName(), e);
                             return null;

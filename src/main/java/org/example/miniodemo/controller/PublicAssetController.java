@@ -3,6 +3,8 @@ package org.example.miniodemo.controller;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.dto.CheckRequestDto;
+import org.example.miniodemo.dto.FileDetailDto;
+import org.example.miniodemo.dto.FileExistsDto;
 import org.example.miniodemo.service.PublicAssetService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -31,13 +33,12 @@ public class PublicAssetController {
     /**
      * GET /list : 获取公共存储桶中所有文件的列表。
      *
-     * @return {@link ResponseEntity} 包含一个Map列表的响应实体，每个Map代表一个文件，
-     *         包含 "name" 和 "url" 两个键。
+     * @return {@link ResponseEntity} 包含一个DTO列表的响应实体，每个DTO代表一个文件。
      *         成功时返回文件列表和HTTP状态码200 (OK)。
      *         如果发生内部错误，则返回一个空列表和HTTP状态码500 (Internal Server Error)。
      */
     @GetMapping("/list")
-    public ResponseEntity<List<Map<String, Object>>> listPublicFiles() {
+    public ResponseEntity<List<FileDetailDto>> listPublicFiles() {
         try {
             return ResponseEntity.ok(publicAssetService.listPublicFiles());
         } catch (Exception e) {
@@ -50,16 +51,17 @@ public class PublicAssetController {
      * POST /check : 检查文件是否已存在（用于秒传）。
      *
      * @param checkRequest 包含文件哈希 (fileHash) 和原始文件名 (fileName) 的请求体。
-     * @return {@link ResponseEntity} 返回一个Map，包含一个布尔值 "exists"。
+     * @return {@link ResponseEntity} 返回一个包含布尔值的DTO "exists"。
      */
     @PostMapping("/check")
-    public ResponseEntity<Map<String, Boolean>> checkFileExists(@RequestBody CheckRequestDto checkRequest) {
+    public ResponseEntity<FileExistsDto> checkFileExists(@RequestBody CheckRequestDto checkRequest) {
         try {
             boolean exists = publicAssetService.checkFileExists(checkRequest.getFileHash(), checkRequest.getFileName());
-            return ResponseEntity.ok(Collections.singletonMap("exists", exists));
+            return ResponseEntity.ok(new FileExistsDto(exists));
         } catch (Exception e) {
             log.error("检查公共文件失败: {}", e.getMessage(), e);
-            return ResponseEntity.ok(Collections.singletonMap("exists", false));
+            // 出现异常时，为安全起见，返回false，让前端继续走上传流程
+            return ResponseEntity.ok(new FileExistsDto(false));
         }
     }
 

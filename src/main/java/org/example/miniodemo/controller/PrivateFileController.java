@@ -3,6 +3,8 @@ package org.example.miniodemo.controller;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.dto.CheckRequestDto;
+import org.example.miniodemo.dto.FileDetailDto;
+import org.example.miniodemo.dto.FileExistsDto;
 import org.example.miniodemo.dto.MergeRequestDto;
 import org.example.miniodemo.service.PrivateFileService;
 import org.springframework.core.io.InputStreamResource;
@@ -41,18 +43,17 @@ public class PrivateFileController {
      * <p>
      * 此接口会过滤掉用于分片上传的临时文件，只返回最终合并完成的完整文件。
      *
-     * @return {@link ResponseEntity} 包含文件信息列表的响应实体。每个文件信息是一个包含
-     *         "name" (对象名) 和 "size" (文件大小) 的Map。
+     * @return {@link ResponseEntity} 包含文件信息DTO列表的响应实体。
      *         成功时返回列表和HTTP 200，失败时返回错误信息和HTTP 500。
      */
     @GetMapping("/list")
-    public ResponseEntity<?> listPrivateFiles() {
+    public ResponseEntity<List<FileDetailDto>> listPrivateFiles() {
         try {
-            List<Map<String, Object>> fileList = privateFileService.listPrivateFiles();
+            List<FileDetailDto> fileList = privateFileService.listPrivateFiles();
             return ResponseEntity.ok(fileList);
         } catch (Exception e) {
             log.error("获取文件列表失败: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("获取文件列表失败: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Collections.emptyList());
         }
     }
 
@@ -91,17 +92,17 @@ public class PrivateFileController {
      * 在上传前，前端会先计算文件的哈希值，然后调用此接口。
      *
      * @param checkRequest 包含文件哈希 (fileHash) 和原始文件名 (fileName) 的请求体。
-     * @return {@link ResponseEntity} 返回一个Map，包含一个布尔值 a.
+     * @return {@link ResponseEntity} 返回一个包含布尔值的DTO。
      */
     @PostMapping("/check")
-    public ResponseEntity<Map<String, Boolean>> checkFileExists(@RequestBody CheckRequestDto checkRequest) {
+    public ResponseEntity<FileExistsDto> checkFileExists(@RequestBody CheckRequestDto checkRequest) {
         try {
             boolean exists = privateFileService.checkFileExists(checkRequest.getFileHash(), checkRequest.getFileName());
-            return ResponseEntity.ok(Collections.singletonMap("exists", exists));
+            return ResponseEntity.ok(new FileExistsDto(exists));
         } catch (Exception e) {
             log.error("检查文件失败: {}", e.getMessage(), e);
             // 出现异常时，为安全起见，返回false，让前端继续走上传流程
-            return ResponseEntity.ok(Collections.singletonMap("exists", false));
+            return ResponseEntity.ok(new FileExistsDto(false));
         }
     }
 
