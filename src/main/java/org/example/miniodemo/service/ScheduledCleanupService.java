@@ -33,7 +33,6 @@ public class ScheduledCleanupService {
 
     private final MinioClient minioClient;
     private final MinioBucketConfig bucketConfig;
-    private static final String TEMP_CHUNK_PREFIX = "tmp-chunks/";
 
     /**
      * 每天凌晨2点执行的定时任务，用于清理超过24小时未被合并的临时分片。
@@ -41,9 +40,10 @@ public class ScheduledCleanupService {
      * <b>执行逻辑:</b>
      * <ol>
      *     <li>设置一个24小时前的时间点作为清理阈值。</li>
-     *     <li>遍历私有存储桶中所有以 {@code "tmp-chunks/"} 为前缀的临时对象。</li>
-     *     <li>检查每个对象的最后修改时间。</li>
-     *     <li>如果对象的最后修改时间早于24小时前的阈值，则将其识别为"孤儿分片"并予以删除。</li>
+     *     <li>遍历私有存储桶中的所有对象。</li>
+     *     <li>检查每个对象的最后修改时间是否早于24小时前的阈值。</li>
+     *     <li>同时，检查对象的路径是否不符合最终文件的格式 (YYYY/MM/DD/...)。</li>
+     *     <li>同时满足以上两个条件的对象，被识别为"孤儿分片"并予以删除。</li>
      *     <li>记录被删除的分片总数。</li>
      * </ol>
      * 这个机制确保了即使文件上传过程异常中断，残留的分片数据也最终会被自动回收。
@@ -55,10 +55,10 @@ public class ScheduledCleanupService {
         final ZonedDateTime threshold = ZonedDateTime.now().minus(24, ChronoUnit.HOURS);
         
         try {
+            // 扫描整个私有存储桶
             Iterable<Result<Item>> results = minioClient.listObjects(
                     ListObjectsArgs.builder()
                             .bucket(bucketConfig.getPrivateFiles())
-                            .prefix(TEMP_CHUNK_PREFIX)
                             .recursive(true)
                             .build());
 
@@ -74,10 +74,17 @@ public class ScheduledCleanupService {
                     .filter(item -> {
                         if (item == null) return false;
                         try {
-                            // 检查文件的最后修改时间是否早于我们设定的24小时阈值
-                            return item.lastModified().isBefore(threshold);
+                            // 检查1: 文件是否超过24小时未修改
+                            boolean isOld = item.lastModified().isBefore(threshold);
+                            if (!isOld) return false;
+
+                            // 检查2: 文件路径是否不像最终合并的文件路径
+                            // 临时分片路径是 batchId/chunkNum (e.g., "uuid/0"), 不会匹配最终文件路径的正则
+                            boolean isNotFinalFile = !item.objectName().matches("^\\d{4}/\\d{2}/\\d{2}/.+/.+");
+                            
+                            return isNotFinalFile;
                         } catch (Exception e) {
-                             log.error("获取对象最后修改时间失败: {}", item.objectName(), e);
+                             log.error("检查对象是否为孤儿分片时出错: {}", item.objectName(), e);
                             return false;
                         }
                     })

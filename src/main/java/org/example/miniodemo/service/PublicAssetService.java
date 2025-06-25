@@ -22,7 +22,6 @@ import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import java.util.Objects;
@@ -43,7 +42,6 @@ public class PublicAssetService {
     private final MinioClient minioClient;
     private final MinioBucketConfig bucketConfig;
     private final MinioConfig minioConfig;
-    private static final String ORIGINAL_FILENAME_META_KEY = "X-Amz-Meta-Original-Filename";
 
     /**
      * 检查文件是否存在。

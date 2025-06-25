@@ -43,8 +43,6 @@ public class PrivateFileService {
 
     private final MinioClient minioClient;
     private final MinioBucketConfig bucketConfig;
-    private static final String TEMP_FILE_SUFFIX = ".tmp";
-    private static final String ORIGINAL_FILENAME_META_KEY = "X-Amz-Meta-Original-Filename";
 
     /**
      * 检查具有特定哈希值的文件是否已存在于当天的路径下。
