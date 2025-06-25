@@ -1,10 +1,8 @@
-# application.yml
+spring:
+  profiles:
+    active: prod # dev, prod
+
 minio:
-  endpoint: http://jenasi.ai:900
-#  access-key: niraoHPAHztBnR4pNvKD
-#  secret-key: XlVdaFI8rWSCnGxDbzc4KdaL3bm5Q43i8422oQPx
-  access-key: QDWe46Cm2K4UmKewzZck
-  secret-key: W4Mrd4GTajP28F8WS06PmGAvUUfKSTPavskCEIdq
   bucket:
-    private-files: "private-files" # 用于存储需要权限控制的私有文件
-    public-assets: "public-assets"  # 用于存储可公开访问的图片等资源
+    private-files: "private-files"
+    public-assets: "public-assets"

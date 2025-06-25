@@ -1,0 +1,4 @@
+minio:
+  endpoint: http://192.168.0.7:900
+  access-key: AsttK4yHDuh2U8pVfyvQ
+  secret-key: WNwwyvJ6TzXEe5uFJVjVIAlC6QEtAwzYT7dKNoa0
