@@ -176,25 +176,35 @@ public class FileController {
         }
     }
 
-    // --- 公开图片上传接口 ---
+    // ========== 公开资源接口 ==========
 
     /**
-     * POST /public/upload-image : 上传单个公开图片。
-     *
-     * @param file 图片文件
-     * @return 图片的永久公开URL
+     * 获取公共存储桶中所有文件的列表。
+     * @return 文件信息列表
      */
-    @PostMapping("/public/upload-image")
-    public ResponseEntity<?> uploadPublicImage(@RequestParam("file") MultipartFile file) {
-        if (file.isEmpty()) {
-            return ResponseEntity.badRequest().body("文件不能为空");
+    @GetMapping("/public/list")
+    public ResponseEntity<List<Map<String, Object>>> listPublicFiles() {
+        try {
+            return ResponseEntity.ok(minioService.listPublicFiles());
+        } catch (Exception e) {
+            log.error("获取公共文件列表失败", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Collections.emptyList());
         }
+    }
+
+    /**
+     * 上传一个公开的图片文件。
+     * @param file 上传的文件
+     * @return 包含文件公开URL的响应实体
+     */
+    @PostMapping("/public/upload")
+    public ResponseEntity<String> uploadPublicImage(@RequestParam("file") MultipartFile file) {
         try {
             String url = minioService.uploadPublicImage(file);
-            return ResponseEntity.ok(Map.of("url", url));
+            return ResponseEntity.ok(url);
         } catch (Exception e) {
-            log.error("公开图片上传失败: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("上传失败: " + e.getMessage());
+            log.error("上传公共图片失败", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("上传失败");
         }
     }
 }

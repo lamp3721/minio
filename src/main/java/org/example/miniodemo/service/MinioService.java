@@ -8,6 +8,7 @@ import io.minio.messages.Item;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.config.MinioBucketConfig;
+import org.example.miniodemo.config.MinioConfig;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -24,6 +25,7 @@ public class MinioService {
 
     private final MinioClient minioClient;
     private final MinioBucketConfig bucketConfig; // 注入存储桶配置
+    private final MinioConfig minioConfig; // 注入MinIO基础配置
     /**
      * 定义一个临时的目录路径，用于存放所有上传的分片。
      * 这样做的好处是可以方便地对临时文件进行管理和清理。
@@ -54,6 +56,36 @@ public class MinioService {
                         return fileData;
                     } catch (Exception e) {
                         log.error("Error getting item from MinIO", e);
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 获取公共存储桶中所有文件的列表。
+     *
+     * @return 文件信息列表，每个元素是一个包含 'name' 和 'url' 的 Map
+     * @throws Exception 如果与 MinIO 通信时发生错误
+     */
+    public List<Map<String, Object>> listPublicFiles() throws Exception {
+        Iterable<Result<Item>> results = minioClient.listObjects(
+                ListObjectsArgs.builder().bucket(bucketConfig.getPublicAssets()).build());
+
+        // 使用 MinioConfig 来获取基础端点URL
+        String baseUrl = minioConfig.getEndpoint() + "/" + bucketConfig.getPublicAssets() + "/";
+
+        return StreamSupport.stream(results.spliterator(), false)
+                .map(result -> {
+                    try {
+                        Item item = result.get();
+                        Map<String, Object> fileData = new HashMap<>();
+                        fileData.put("name", item.objectName());
+                        fileData.put("url", baseUrl + item.objectName());
+                        return fileData;
+                    } catch (Exception e) {
+                        log.error("Error getting item from MinIO for public list", e);
                         return null;
                     }
                 })
