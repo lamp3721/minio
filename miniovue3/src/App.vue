@@ -218,15 +218,14 @@ const handleUpload = async (options) => {
     // 步骤3: 合并成功，上传完成
     uploadProgress.value.percentage = 100;
     uploadProgress.value.status = '上传成功！';
-    ElMessage.success('文件上传成功！');
-    fetchFileList(); // 成功后刷新文件列表
-
+    ElMessage.success('文件上传成功!');
+    await fetchFileList(); // 刷新文件列表
   } catch (error) {
-    ElMessage.error('上传失败，请检查控制台获取详细信息。');
-    console.error('Upload failed:', error);
+    console.error('文件上传或合并过程中发生错误:', error);
     uploadProgress.value.status = '上传失败！';
+    ElMessage.error('文件上传失败，服务器将在后台自动清理临时文件，请稍后重试。');
   } finally {
-     // 无论成功或失败，3秒后重置上传组件和进度条
+     // 6. 无论成功或失败，3秒后重置上传组件和进度条
      setTimeout(() => {
         uploadProgress.value = { percentage: 0, status: '' };
         if (uploadRef.value) {
