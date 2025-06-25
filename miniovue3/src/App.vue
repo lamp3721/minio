@@ -30,7 +30,10 @@
          <el-progress :percentage="uploadProgress.percentage" :text-inside="true" :stroke-width="20" class="progress-bar"/>
          <div class="progress-info">
            <span>{{ uploadProgress.status }}</span>
-           <span v-if="uploadSpeed" class="upload-speed">{{ uploadSpeed }}</span>
+           <div class="sub-info">
+             <span v-if="uploadSpeed" class="upload-speed">{{ uploadSpeed }}</span>
+             <span v-if="elapsedTime" class="elapsed-time">耗时: {{ elapsedTime }}</span>
+           </div>
          </div>
       </div>
     </el-card>
@@ -80,6 +83,10 @@ const uploadProgress = ref({
 const uploadSpeed = ref('');
 // 新增：用于判断是否正在上传中
 const isUploading = ref(false);
+// 新增：用于存储已用时间的 ref
+const elapsedTime = ref('');
+// 新增：用于存储计时器ID的 ref
+const uploadTimer = ref(null);
 
 // --- Constants: 常量定义 ---
 
@@ -201,10 +208,18 @@ const handleUpload = async (options) => {
 
   uploadProgress.value = { percentage: 0, status: '正在计算文件...' };
   uploadSpeed.value = '';
+  elapsedTime.value = '00:00'; // 初始化计时器显示
 
   let lastLoaded = 0;
   let lastTime = Date.now();
+  const startTime = lastTime; // 记录上传开始时间
   let totalLoaded = 0;
+
+  // 启动计时器，每秒更新一次已用时间
+  uploadTimer.value = setInterval(() => {
+    const seconds = Math.floor((Date.now() - startTime) / 1000);
+    elapsedTime.value = formatDuration(seconds);
+  }, 1000);
 
   const chunkProgress = new Array(chunkCount).fill(0);
 
@@ -256,10 +271,12 @@ const handleUpload = async (options) => {
     ElMessage.error('文件上传失败，服务器将在后台自动清理临时文件，请稍后重试。');
   } finally {
     isUploading.value = false;
+    clearInterval(uploadTimer.value); // 停止计时器
     setTimeout(() => {
       if (!isUploading.value) { // 再次检查，避免覆盖新的上传进度
         uploadProgress.value = { percentage: 0, status: '' };
         uploadSpeed.value = '';
+        elapsedTime.value = ''; // 清空计时显示
         if (uploadRef.value) {
             uploadRef.value.clearFiles();
         }
@@ -297,6 +314,24 @@ const formatFileSize = (row, column, cellValue) => {
   const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(cellValue) / Math.log(k));
   return parseFloat((cellValue / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
+/**
+ * 将秒数格式化为 MM:SS 或 HH:MM:SS 的字符串
+ * @param {number} totalSeconds - 总秒数
+ * @returns {string} 格式化后的时间字符串
+ */
+const formatDuration = (totalSeconds) => {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = Math.floor(totalSeconds % 60);
+
+  const padded = (num) => num.toString().padStart(2, '0');
+
+  if (hours > 0) {
+    return `${padded(hours)}:${padded(minutes)}:${padded(seconds)}`;
+  }
+  return `${padded(minutes)}:${padded(seconds)}`;
 };
 
 // --- Lifecycle Hooks: 生命周期钩子 ---
@@ -356,7 +391,13 @@ onMounted(() => {
   min-width: 120px;
 }
 
-.upload-speed {
+.sub-info {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.upload-speed, .elapsed-time {
   font-size: 12px;
   color: #909399;
 }
