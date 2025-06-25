@@ -59,7 +59,7 @@ const loading = ref(false);
 const publicFiles = ref([]);
 
 const apiClient = axios.create({
-  baseURL: 'http://localhost:8080/minio',
+  baseURL: '/api/minio',
 });
 
 const fetchPublicFiles = async () => {

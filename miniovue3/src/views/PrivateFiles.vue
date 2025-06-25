@@ -74,7 +74,7 @@ const elapsedTime = ref('');
 const uploadTimer = ref(null);
 
 // --- Constants ---
-const API_BASE_URL = 'http://localhost:8080/minio';
+const API_BASE_URL = '/api/minio';
 const CHUNK_SIZE = 5 * 1024 * 1024;
 
 // --- API Client ---
