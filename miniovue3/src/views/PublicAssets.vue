@@ -41,7 +41,10 @@
         <div v-for="file in publicFiles" :key="file.url" class="image-card">
           <el-image :src="file.url" fit="contain" lazy class="gallery-image"/>
           <div class="image-info">
-            <span class="image-name" :title="file.name">{{ file.name }}</span>
+            <div class="file-details">
+              <span class="image-name" :title="file.name">{{ file.name }}</span>
+              <span class="file-size">{{ formatFileSize(file.size) }}</span>
+            </div>
             <div class="actions">
               <el-button size="small" type="success" @click="handleCopyPublicLink(file)">复制链接</el-button>
               <el-button size="small" type="danger" @click="handleDelete(file)">删除</el-button>
@@ -67,6 +70,12 @@ const uploadStatus = ref('');
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
 });
+
+const formatFileSize = (size) => {
+  if (!size) return '0 B';
+  const i = Math.floor(Math.log(size) / Math.log(1024));
+  return `${(size / Math.pow(1024, i)).toFixed(2)} ${['B', 'KB', 'MB', 'GB', 'TB'][i]}`;
+};
 
 const calculateFileHash = (file) => {
   return new Promise((resolve, reject) => {
@@ -233,12 +242,22 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
 }
+.file-details {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  overflow: hidden;
+  margin-right: 10px;
+}
 .image-name {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex-grow: 1;
-  margin-right: 10px;
+  font-size: 14px;
+}
+.file-size {
+    font-size: 12px;
+    color: #909399;
 }
 .actions {
   display: flex;
