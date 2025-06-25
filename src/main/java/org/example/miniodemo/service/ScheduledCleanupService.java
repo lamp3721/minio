@@ -20,6 +20,12 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+/**
+ * 提供定时任务，用于清理系统中的过期临时文件。
+ * <p>
+ * 这个服务的核心功能是定期扫描并删除那些因上传中断、失败或其他原因而残留的临时文件分片，
+ * 从而防止这些"孤儿文件"无限期地占用存储空间。
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -30,14 +36,21 @@ public class ScheduledCleanupService {
     private static final String TEMP_CHUNK_PREFIX = "tmp-chunks/";
 
     /**
-     * 后端主动定时任务，每天凌晨3点执行。
-     * 这是系统中唯一的清理机制，负责清理所有超过24小时仍未合并的孤儿分片文件。
-     * cron表达式格式: [秒] [分] [时] [日] [月] [周]
-     * "0 0 3 * * ?" 表示每天的3点0分0秒执行。
+     * 每天凌晨2点执行的定时任务，用于清理超过24小时未被合并的临时分片。
+     * <p>
+     * <b>执行逻辑:</b>
+     * <ol>
+     *     <li>设置一个24小时前的时间点作为清理阈值。</li>
+     *     <li>遍历私有存储桶中所有以 {@code "tmp-chunks/"} 为前缀的临时对象。</li>
+     *     <li>检查每个对象的最后修改时间。</li>
+     *     <li>如果对象的最后修改时间早于24小时前的阈值，则将其识别为"孤儿分片"并予以删除。</li>
+     *     <li>记录被删除的分片总数。</li>
+     * </ol>
+     * 这个机制确保了即使文件上传过程异常中断，残留的分片数据也最终会被自动回收。
      */
-    @Scheduled(cron = "0 0 3 * * ?")
+    @Scheduled(cron = "0 0 2 * * ?") // 每天凌晨2点执行
     public void cleanupOrphanedChunks() {
-        log.info("开始执行唯一的后端每日自动清理任务，清理孤儿分片...");
+        log.info("开始执行孤儿分片清理任务...");
 
         final ZonedDateTime threshold = ZonedDateTime.now().minus(24, ChronoUnit.HOURS);
         

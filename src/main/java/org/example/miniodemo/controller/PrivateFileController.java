@@ -18,6 +18,14 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 专用于处理私有文件（Private Files）相关操作的API控制器。
+ * <p>
+ * “私有文件”是指存储在受限访问存储桶中的对象，必须通过预签名URL或后端代理才能访问，
+ * 不能直接通过URL公开访问。
+ * 此控制器包含了对私有文件进行增、删、查、改（通过重新上传）以及复杂的分片上传和下载的全部功能。
+ * 所有此控制器下的端点都以 {@code /minio/private} 为前缀。
+ */
 @Slf4j
 @RestController
 @RequestMapping("/minio/private")
@@ -26,6 +34,15 @@ public class PrivateFileController {
 
     private final PrivateFileService privateFileService;
 
+    /**
+     * GET /list : 获取私有存储桶中所有文件的列表。
+     * <p>
+     * 此接口会过滤掉用于分片上传的临时文件，只返回最终合并完成的完整文件。
+     *
+     * @return {@link ResponseEntity} 包含文件信息列表的响应实体。每个文件信息是一个包含
+     *         "name" (对象名) 和 "size" (文件大小) 的Map。
+     *         成功时返回列表和HTTP 200，失败时返回错误信息和HTTP 500。
+     */
     @GetMapping("/list")
     public ResponseEntity<?> listPrivateFiles() {
         try {
@@ -37,6 +54,16 @@ public class PrivateFileController {
         }
     }
 
+    /**
+     * POST /upload/chunk : 上传单个文件分片。
+     * <p>
+     * 这是分片上传流程的第二步，前端将文件切分后，会为每个分片调用此接口。
+     *
+     * @param file        由multipart/form-data请求体承载的文件分片数据。
+     * @param batchId     唯一标识本次完整文件上传的批次ID，由前端生成。
+     * @param chunkNumber 当前分片的序号（从0开始）。
+     * @return {@link ResponseEntity} 包含操作结果字符串的响应实体。
+     */
     @PostMapping("/upload/chunk")
     public ResponseEntity<String> uploadPrivateChunk(
             @RequestParam("file") MultipartFile file,
@@ -56,6 +83,15 @@ public class PrivateFileController {
         }
     }
 
+    /**
+     * POST /upload/merge : 通知服务器合并指定批次的所有分片。
+     * <p>
+     * 这是分片上传流程的最后一步。当前端所有分片都成功调用 {@code /upload/chunk} 后，
+     * 调用此接口来触发服务器端的文件合并操作。
+     *
+     * @param mergeRequest 包含批次ID (batchId) 和最终文件名 (fileName) 的请求体。
+     * @return {@link ResponseEntity} 包含操作结果字符串的响应实体。
+     */
     @PostMapping("/upload/merge")
     public ResponseEntity<String> mergePrivateChunks(@RequestBody MergeRequestDto mergeRequest) {
         try {
@@ -67,6 +103,15 @@ public class PrivateFileController {
         }
     }
 
+    /**
+     * GET /download-url : 获取私有文件的预签名下载URL。
+     * <p>
+     * 生成一个有时间限制（例如15分钟）的URL，客户端（如浏览器）可以使用此URL直接从MinIO下载文件，
+     * 而无需通过应用服务器代理。这是推荐的高效下载方式。
+     *
+     * @param fileName 需要下载的文件的完整对象名。
+     * @return {@link ResponseEntity} 包含预签名URL字符串的响应实体。
+     */
     @GetMapping("/download-url")
     public ResponseEntity<String> getPrivatePresignedDownloadUrl(@RequestParam("fileName") String fileName) {
         try {
@@ -78,6 +123,16 @@ public class PrivateFileController {
         }
     }
 
+    /**
+     * GET /download : 通过后端服务器代理下载私有文件。
+     * <p>
+     * 这种方式会将文件数据从MinIO流经本应用服务器，再转发给客户端。
+     * 它会占用应用服务器的带宽和内存，适用于需要对下载过程进行额外控制（如权限校验、日志记录）的场景，
+     * 但在性能上不如预签名URL。
+     *
+     * @param fileName 需要下载的文件的完整对象名。
+     * @return {@link ResponseEntity} 包含文件数据流的 {@link Resource} 响应实体。
+     */
     @GetMapping("/download")
     public ResponseEntity<Resource> downloadPrivateFile(@RequestParam("fileName") String fileName) {
         try {
@@ -98,6 +153,12 @@ public class PrivateFileController {
         }
     }
 
+    /**
+     * DELETE /delete : 删除一个私有文件。
+     *
+     * @param fileName 需要删除的文件的完整对象名。
+     * @return {@link ResponseEntity} 包含操作结果字符串的响应实体。
+     */
     @DeleteMapping("/delete")
     public ResponseEntity<String> deletePrivateFile(@RequestParam("fileName") String fileName) {
         try {

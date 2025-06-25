@@ -10,6 +10,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 专用于处理存储桶（Bucket）相关操作的API控制器。
+ * <p>
+ * 提供例如初始化应用程序所需存储桶等功能。
+ */
 @Slf4j
 @RestController
 @RequestMapping("/minio/buckets")
@@ -21,7 +26,14 @@ public class BucketController {
 
     /**
      * POST /init : 初始化应用所需的存储桶。
-     * 在应用首次启动时调用此接口，可以自动创建配置中定义的存储桶。
+     * <p>
+     * 此接口设计为在应用首次启动或需要确保存储桶存在时调用。
+     * 它会检查配置中定义的私有文件桶和公共资源桶是否已存在，如果不存在，则会自动创建。
+     * 这是一个幂等操作，重复调用不会产生副作用。
+     *
+     * @return {@link ResponseEntity} 包含操作结果的响应实体。
+     *         成功时返回 "存储桶初始化成功或已存在。"，并附带HTTP状态码200 (OK)。
+     *         失败时返回错误信息，并附带HTTP状态码500 (Internal Server Error)。
      */
     @PostMapping("/init")
     public ResponseEntity<String> initBuckets() {

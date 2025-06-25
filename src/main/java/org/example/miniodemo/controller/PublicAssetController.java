@@ -12,6 +12,13 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 专用于处理公共资源（Public Assets）相关操作的API控制器。
+ * <p>
+ * “公共资源”是指存储在公开访问存储桶中的对象，通常是图片、CSS、JS文件等，
+ * 可以通过直接的URL链接被浏览器或客户端访问，无需签名。
+ * 所有此控制器下的端点都以 {@code /minio/public} 为前缀。
+ */
 @Slf4j
 @RestController
 @RequestMapping("/minio/public")
@@ -22,7 +29,11 @@ public class PublicAssetController {
 
     /**
      * GET /list : 获取公共存储桶中所有文件的列表。
-     * @return 文件信息列表
+     *
+     * @return {@link ResponseEntity} 包含一个Map列表的响应实体，每个Map代表一个文件，
+     *         包含 "name" 和 "url" 两个键。
+     *         成功时返回文件列表和HTTP状态码200 (OK)。
+     *         如果发生内部错误，则返回一个空列表和HTTP状态码500 (Internal Server Error)。
      */
     @GetMapping("/list")
     public ResponseEntity<List<Map<String, Object>>> listPublicFiles() {
@@ -36,8 +47,11 @@ public class PublicAssetController {
 
     /**
      * POST /upload : 上传一个公开的图片文件。
-     * @param file 上传的文件
-     * @return 包含文件公开URL的响应实体
+     *
+     * @param file 由multipart/form-data请求体中名为 "file" 的部分承载的上传文件。不能为空。
+     * @return {@link ResponseEntity} 包含上传成功后文件的永久公开访问URL的响应实体。
+     *         成功时返回URL字符串和HTTP状态码200 (OK)。
+     *         失败时返回错误信息和HTTP状态码500 (Internal Server Error)。
      */
     @PostMapping("/upload")
     public ResponseEntity<String> uploadPublicImage(@RequestParam("file") MultipartFile file) {
@@ -52,8 +66,11 @@ public class PublicAssetController {
 
     /**
      * DELETE /delete : 删除一个公共文件。
-     * @param fileName 文件名
-     * @return 删除结果
+     *
+     * @param fileName 需要删除的文件的名称（即MinIO中的对象名称）。通过请求参数传递。
+     * @return {@link ResponseEntity} 包含操作结果字符串的响应实体。
+     *         成功时返回 "文件删除成功: [文件名]" 和HTTP状态码200 (OK)。
+     *         失败时返回错误信息和HTTP状态码500 (Internal Server Error)。
      */
     @DeleteMapping("/delete")
     public ResponseEntity<String> deletePublicFile(@RequestParam("fileName") String fileName) {
