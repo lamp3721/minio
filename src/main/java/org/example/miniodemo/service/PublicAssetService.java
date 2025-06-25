@@ -15,6 +15,7 @@ import org.example.miniodemo.config.MinioBucketConfig;
 import org.example.miniodemo.config.MinioConfig;
 import org.example.miniodemo.controller.PublicAssetController;
 import org.example.miniodemo.dto.FileDetailDto;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -37,12 +38,20 @@ import java.util.Objects;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class PublicAssetService {
 
     private final MinioClient minioClient;
     private final MinioBucketConfig bucketConfig;
     private final MinioConfig minioConfig;
+
+    public PublicAssetService(
+            @Qualifier("internalMinioClient") MinioClient minioClient,
+            MinioBucketConfig bucketConfig,
+            MinioConfig minioConfig) {
+        this.minioClient = minioClient;
+        this.bucketConfig = bucketConfig;
+        this.minioConfig = minioConfig;
+    }
 
     /**
      * 检查文件是否存在。
@@ -86,7 +95,7 @@ public class PublicAssetService {
                 ListObjectsArgs.builder().bucket(bucketConfig.getPublicAssets()).recursive(true).build()
         );
 
-        String baseUrl = minioConfig.getEndpoint() + "/" + bucketConfig.getPublicAssets() + "/";
+        String baseUrl = minioConfig.getPublicEndpoint() + "/" + bucketConfig.getPublicAssets() + "/";
 
         return StreamSupport.stream(results.spliterator(), false)
                 .map(itemResult -> {
@@ -143,7 +152,7 @@ public class PublicAssetService {
             log.info("【文件上传 - 公共库】文件上传成功。对象路径: '{}'。", objectName);
         }
 
-        return minioConfig.getEndpoint() + "/" + bucketConfig.getPublicAssets() + "/" + objectName;
+        return minioConfig.getPublicEndpoint() + "/" + bucketConfig.getPublicAssets() + "/" + objectName;
     }
 
     /**

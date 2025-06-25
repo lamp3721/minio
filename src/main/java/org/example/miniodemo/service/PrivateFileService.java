@@ -9,8 +9,10 @@ import io.minio.errors.MinioException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.config.MinioBucketConfig;
+import org.example.miniodemo.config.MinioConfig;
 import org.example.miniodemo.controller.PrivateFileController;
 import org.example.miniodemo.dto.FileDetailDto;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -39,11 +41,23 @@ import java.util.stream.StreamSupport;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class PrivateFileService {
 
-    private final MinioClient minioClient;
+    private final MinioClient internalMinioClient;
+    private final MinioClient publicMinioClient;
     private final MinioBucketConfig bucketConfig;
+    private final MinioConfig minioConfig;
+
+    public PrivateFileService(
+            @Qualifier("internalMinioClient") MinioClient internalMinioClient,
+            @Qualifier("publicMinioClient") MinioClient publicMinioClient,
+            MinioBucketConfig bucketConfig,
+            MinioConfig minioConfig) {
+        this.internalMinioClient = internalMinioClient;
+        this.publicMinioClient = publicMinioClient;
+        this.bucketConfig = bucketConfig;
+        this.minioConfig = minioConfig;
+    }
 
     /**
      * 检查具有特定哈希值的文件是否已存在于当天的路径下。
@@ -61,7 +75,7 @@ public class PrivateFileService {
 
         log.info("【秒传检查 - 私有库】开始检查文件是否存在，对象路径: {}", objectName);
         try {
-            minioClient.statObject(StatObjectArgs.builder()
+            internalMinioClient.statObject(StatObjectArgs.builder()
                     .bucket(bucketConfig.getPrivateFiles())
                     .object(objectName)
                     .build());
@@ -84,7 +98,7 @@ public class PrivateFileService {
      */
     public List<FileDetailDto> listPrivateFiles() throws MinioException {
         try {
-            Iterable<Result<Item>> results = minioClient.listObjects(ListObjectsArgs.builder()
+            Iterable<Result<Item>> results = internalMinioClient.listObjects(ListObjectsArgs.builder()
                     .bucket(bucketConfig.getPrivateFiles())
                     .recursive(true)
                     .build());
@@ -142,7 +156,7 @@ public class PrivateFileService {
     public void uploadChunk(MultipartFile file, String batchId, Integer chunkNumber) throws Exception {
         String objectName = batchId + "/" + chunkNumber;
         try (InputStream inputStream = file.getInputStream()) {
-            minioClient.putObject(
+            internalMinioClient.putObject(
                     PutObjectArgs.builder()
                             .bucket(bucketConfig.getPrivateFiles())
                             .object(objectName)
@@ -164,7 +178,7 @@ public class PrivateFileService {
         try {
             // 1. 列出该批次的所有分片
             List<ComposeSource> sources = StreamSupport.stream(
-                            minioClient.listObjects(ListObjectsArgs.builder()
+                            internalMinioClient.listObjects(ListObjectsArgs.builder()
                                     .bucket(bucketConfig.getPrivateFiles())
                                     .prefix(batchId + "/") // 分片存储在以batchId为名的虚拟目录下
                                     .recursive(true)
@@ -195,7 +209,7 @@ public class PrivateFileService {
             String finalObjectName = String.join("/", year, month, day, fileHash, originalFileName);
 
             // 3. 将分片合并成一个新对象
-            minioClient.composeObject(ComposeObjectArgs.builder()
+            internalMinioClient.composeObject(ComposeObjectArgs.builder()
                     .bucket(bucketConfig.getPrivateFiles())
                     .object(finalObjectName)
                     .sources(sources)
@@ -218,7 +232,7 @@ public class PrivateFileService {
      * @throws MinioException 如果生成URL时出错。
      */
     public String getPresignedPrivateDownloadUrl(String objectName) throws Exception {
-        return minioClient.getPresignedObjectUrl(
+        return publicMinioClient.getPresignedObjectUrl(
                 GetPresignedObjectUrlArgs.builder()
                         .method(Method.GET)
                         .bucket(bucketConfig.getPrivateFiles())
@@ -239,7 +253,7 @@ public class PrivateFileService {
      * @throws Exception 如果获取对象时发生错误。
      */
     public InputStream downloadPrivateFile(String objectName) throws Exception {
-        return minioClient.getObject(
+        return internalMinioClient.getObject(
                 GetObjectArgs.builder().bucket(bucketConfig.getPrivateFiles()).object(objectName).build());
     }
 
@@ -250,34 +264,32 @@ public class PrivateFileService {
      * @throws MinioException 如果删除操作失败。
      */
     public void deletePrivateFile(String objectName) throws Exception {
-        minioClient.removeObject(RemoveObjectArgs.builder()
-                .bucket(bucketConfig.getPrivateFiles())
-                .object(objectName)
-                .build());
+        internalMinioClient.removeObject(
+                RemoveObjectArgs.builder().bucket(bucketConfig.getPrivateFiles()).object(objectName).build());
     }
 
     private void deleteTemporaryChunks(String batchId) {
         try {
-            List<DeleteObject> toDelete = StreamSupport.stream(minioClient.listObjects(ListObjectsArgs.builder()
+            List<DeleteObject> toDelete = StreamSupport.stream(internalMinioClient.listObjects(
+                    ListObjectsArgs.builder()
                             .bucket(bucketConfig.getPrivateFiles())
                             .prefix(batchId + "/")
                             .recursive(true)
-                            .build()).spliterator(), false)
-                    .map(itemResult -> {
-                        try {
-                            return new DeleteObject(itemResult.get().objectName());
-                        } catch (Exception e) {
-                           return null;
-                        }
-                    })
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toList());
+                            .build()
+            ).spliterator(), false).map(itemResult -> {
+                try {
+                    return new DeleteObject(itemResult.get().objectName());
+                } catch (Exception e) {
+                    throw new RuntimeException("获取待删除分片列表失败", e);
+                }
+            }).collect(Collectors.toList());
 
             if (!toDelete.isEmpty()) {
-                Iterable<Result<DeleteError>> results = minioClient.removeObjects(RemoveObjectsArgs.builder()
-                        .bucket(bucketConfig.getPrivateFiles())
-                        .objects(toDelete)
-                        .build());
+                Iterable<Result<DeleteError>> results = internalMinioClient.removeObjects(
+                        RemoveObjectsArgs.builder()
+                                .bucket(bucketConfig.getPrivateFiles())
+                                .objects(toDelete)
+                                .build());
                 for (Result<DeleteError> result : results) {
                     DeleteError error = result.get();
                     log.error("删除临时分片失败. Object: {}, Message: {}", error.objectName(), error.message());

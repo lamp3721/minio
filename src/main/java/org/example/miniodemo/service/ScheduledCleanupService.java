@@ -12,7 +12,7 @@ import org.example.miniodemo.config.MinioBucketConfig;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import io.minio.ListObjectsArgs;
-
+import org.springframework.beans.factory.annotation.Qualifier;
 
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
@@ -28,11 +28,15 @@ import java.util.stream.StreamSupport;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class ScheduledCleanupService {
 
     private final MinioClient minioClient;
     private final MinioBucketConfig bucketConfig;
+
+    public ScheduledCleanupService(@Qualifier("internalMinioClient") MinioClient minioClient, MinioBucketConfig bucketConfig) {
+        this.minioClient = minioClient;
+        this.bucketConfig = bucketConfig;
+    }
 
     /**
      * 每天凌晨2点执行的定时任务，用于清理超过24小时未被合并的临时分片。

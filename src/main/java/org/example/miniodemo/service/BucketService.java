@@ -5,6 +5,7 @@ import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 /**
  * 专用于处理存储桶（Bucket）相关操作的服务层。
@@ -13,10 +14,13 @@ import org.springframework.stereotype.Service;
  * 被 {@link BucketController} 调用。
  */
 @Service
-@RequiredArgsConstructor
 public class BucketService {
 
     private final MinioClient minioClient;
+
+    public BucketService(@Qualifier("internalMinioClient") MinioClient minioClient) {
+        this.minioClient = minioClient;
+    }
 
     /**
      * 检查一个存储桶是否存在。
