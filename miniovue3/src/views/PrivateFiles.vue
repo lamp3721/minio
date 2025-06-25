@@ -271,6 +271,10 @@ const handleUpload = async (options) => {
       batchId: batchId,
       fileName: file.name,
       fileHash: fileHash,
+
+      //这连个数据不影响合共，只是用于在数据库中记录信息
+      fileSize: file.size,
+      contentType: file.type,
     });
 
     uploadProgress.value.status = '文件上传成功！';
