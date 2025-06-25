@@ -51,13 +51,16 @@ public class PublicAssetService {
      * @return 如果文件存在，则返回true；否则返回false。
      */
     public boolean checkFileExists(String fileHash) {
+        log.info("【秒传检查 - 公共库】开始检查文件是否存在，哈希: {}", fileHash);
         try {
             minioClient.statObject(StatObjectArgs.builder()
                     .bucket(bucketConfig.getPublicAssets())
                     .object(fileHash)
                     .build());
+            log.info("【秒传检查 - 公共库】文件已存在 (哈希: {})。将触发秒传。", fileHash);
             return true;
         } catch (Exception e) {
+            log.info("【秒传检查 - 公共库】文件不存在 (哈希: {})。将执行新上传。", fileHash);
             return false;
         }
     }
@@ -125,6 +128,7 @@ public class PublicAssetService {
                             .headers(Map.of(ORIGINAL_FILENAME_META_KEY, file.getOriginalFilename()))
                             .build()
             );
+            log.info("【文件上传 - 公共库】文件上传成功。对象名 (哈希): '{}'，原始文件名: '{}'。", fileHash, file.getOriginalFilename());
         }
 
         return minioConfig.getEndpoint() + "/" + bucketConfig.getPublicAssets() + "/" + fileHash;

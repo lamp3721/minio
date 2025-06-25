@@ -52,14 +52,16 @@ public class PrivateFileService {
      * @return 如果文件存在，则为true；否则为false。
      */
     public boolean checkFileExists(String fileHash) {
+        log.info("【秒传检查 - 私有库】开始检查文件是否存在，哈希: {}", fileHash);
         try {
             minioClient.statObject(StatObjectArgs.builder()
                     .bucket(bucketConfig.getPrivateFiles())
                     .object(fileHash)
                     .build());
+            log.info("【秒传检查 - 私有库】文件已存在 (哈希: {})。将触发秒传。", fileHash);
             return true;
         } catch (Exception e) {
-            // 通常，"NoSuchKey" 异常意味着文件不存在
+            log.info("【秒传检查 - 私有库】文件不存在 (哈希: {})。将执行新上传。", fileHash);
             return false;
         }
     }
@@ -116,7 +118,7 @@ public class PrivateFileService {
                     .collect(Collectors.toList());
         } catch (Exception e) {
             log.error("列出私有文件失败", e);
-            throw new MinioException();
+            throw new MinioException("无法列出文件");
         }
     }
 
@@ -184,19 +186,17 @@ public class PrivateFileService {
             // 2. 将分片合并成一个以 fileHash 命名的对象，并在元数据中存储原始文件名
             minioClient.composeObject(ComposeObjectArgs.builder()
                     .bucket(bucketConfig.getPrivateFiles())
-                    .object(fileHash) // 最终对象名是 fileHash
+                    .object(fileHash)
                     .sources(sources)
-                    .headers(Map.of(ORIGINAL_FILENAME_META_KEY, originalFileName)) // 存储原始文件名
+                    .headers(Map.of(ORIGINAL_FILENAME_META_KEY, originalFileName))
                     .build());
 
-            log.info("文件 '{}' (原始名: '{}') 合并成功。", fileHash, originalFileName);
-
-            // 3. 删除已合并的分片
+            log.info("【文件合并 - 私有库】文件合并成功。对象名 (哈希): '{}'，原始文件名: '{}'。", fileHash, originalFileName);
             deleteTemporaryChunks(batchId);
 
         } catch (Exception e) {
             log.error("合并文件失败，批次ID: {}", batchId, e);
-            throw new MinioException();
+            throw new MinioException("合并文件失败");
         }
     }
 
@@ -264,10 +264,14 @@ public class PrivateFileService {
                     .collect(Collectors.toList());
 
             if (!toDelete.isEmpty()) {
-                minioClient.removeObjects(RemoveObjectsArgs.builder()
+                Iterable<Result<DeleteError>> results = minioClient.removeObjects(RemoveObjectsArgs.builder()
                         .bucket(bucketConfig.getPrivateFiles())
                         .objects(toDelete)
                         .build());
+                for (Result<DeleteError> result : results) {
+                    DeleteError error = result.get();
+                    log.error("删除临时分片失败. Object: {}, Message: {}", error.objectName(), error.message());
+                }
             }
         } catch (Exception e) {
             log.error("删除临时分片失败, batchId: {}", batchId, e);

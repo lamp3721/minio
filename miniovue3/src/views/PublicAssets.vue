@@ -98,11 +98,14 @@ const fetchPublicFiles = async () => {
 const handlePublicUpload = async (options) => {
   const file = options.file;
   uploadStatus.value = '正在计算文件Hash...';
+  console.log('【公共资源】开始上传流程...');
 
   let fileHash;
   try {
+    console.log('【公共资源】开始计算文件哈希...');
     fileHash = await calculateFileHash(file);
     uploadStatus.value = `文件Hash: ${fileHash}`;
+    console.log(`【公共资源】哈希计算完成: ${fileHash}`);
   } catch (e) {
     ElMessage.error(e);
     uploadStatus.value = 'Hash计算失败！';
@@ -110,10 +113,13 @@ const handlePublicUpload = async (options) => {
   }
 
   try {
+    console.log(`【公共资源】向后端发送检查请求，哈希: ${fileHash}`);
     const checkResponse = await apiClient.post('/public/check', { fileHash });
+    console.log(`【公共资源】收到后端检查响应:`, checkResponse.data);
     if (checkResponse.data.exists) {
       ElMessage.success('文件已存在，秒传成功！');
       uploadStatus.value = '秒传成功！';
+      console.log('【公共资源】后端确认文件已存在，触发秒传。');
       fetchPublicFiles();
       setTimeout(() => uploadStatus.value = '', 3000);
       return;
@@ -124,6 +130,7 @@ const handlePublicUpload = async (options) => {
     return;
   }
 
+  console.log('【公共资源】后端确认文件不存在，开始执行常规上传。');
   const formData = new FormData();
   formData.append('file', file);
   formData.append('fileHash', fileHash);

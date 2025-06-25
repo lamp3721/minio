@@ -177,11 +177,14 @@ const handleUpload = async (options) => {
   }
   isUploading.value = true;
   uploadProgress.value = { percentage: 0, status: '正在计算文件Hash...' };
+  console.log('【私有文件】开始上传流程...');
 
   let fileHash;
   try {
+    console.log('【私有文件】开始计算文件哈希...');
     fileHash = await calculateFileHash(file);
     uploadProgress.value.status = `文件Hash: ${fileHash}`;
+    console.log(`【私有文件】哈希计算完成: ${fileHash}`);
   } catch (e) {
     ElMessage.error(e);
     isUploading.value = false;
@@ -190,10 +193,13 @@ const handleUpload = async (options) => {
 
   // 检查文件是否已存在 (秒传)
   try {
+    console.log(`【私有文件】向后端发送检查请求，哈希: ${fileHash}`);
     const checkResponse = await apiClient.post('/private/check', { fileHash: fileHash, fileName: file.name });
+    console.log(`【私有文件】收到后端检查响应:`, checkResponse.data);
     if (checkResponse.data.exists) {
         ElMessage.success('文件已存在，秒传成功！');
         uploadProgress.value = { percentage: 100, status: '秒传成功！' };
+        console.log('【私有文件】后端确认文件已存在，触发秒传。');
         await fetchFileList(); // 刷新列表
         isUploading.value = false;
          setTimeout(() => {
@@ -210,6 +216,7 @@ const handleUpload = async (options) => {
     return;
   }
 
+  console.log('【私有文件】后端确认文件不存在，开始执行分片上传。');
   const batchId = uuidv4();
   const chunkCount = Math.ceil(file.size / CHUNK_SIZE);
   const chunks = [];
