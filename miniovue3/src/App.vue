@@ -96,7 +96,7 @@ const apiClient = axios.create({
 const fetchFileList = async () => {
   loading.value = true; // 开始加载，显示动画
   try {
-    const response = await apiClient.get('/list-files');
+    const response = await apiClient.get('/private/list');
     fileList.value = response.data;
   } catch (error) {
     ElMessage.error('获取文件列表失败！');
@@ -113,7 +113,7 @@ const fetchFileList = async () => {
  */
 const handleDownload = async (row) => {
   try {
-    const response = await apiClient.get('/download-url', { params: { fileName: row.name } });
+    const response = await apiClient.get('/private/download-url', { params: { fileName: row.name } });
     const url = response.data;
     // 创建一个隐藏的 a 标签并模拟点击，以触发浏览器下载
     const link = document.createElement('a');
@@ -135,7 +135,7 @@ const handleDownload = async (row) => {
  */
 const handleCopyLink = async (row) => {
   try {
-    const response = await apiClient.get('/download-url', { params: { fileName: row.name } });
+    const response = await apiClient.get('/private/download-url', { params: { fileName: row.name } });
     const url = response.data;
     // 使用浏览器原生的 Clipboard API 将URL写入剪贴板
     await navigator.clipboard.writeText(url);
@@ -159,7 +159,7 @@ const handleDelete = async (row) => {
   });
   
   try {
-    await apiClient.delete('/delete', { params: { fileName: row.name } });
+    await apiClient.delete('/private/delete', { params: { fileName: row.name } });
     ElMessage.success('文件删除成功！');
     fetchFileList(); // 删除成功后刷新文件列表
   } catch (error) {
@@ -202,7 +202,7 @@ const handleUpload = async (options) => {
       // 更新上传状态文本
       uploadProgress.value.status = `正在上传分片 ${i + 1}/${chunkCount}`;
       // 调用后端的分片上传接口
-      await apiClient.post('/upload/chunk', formData);
+      await apiClient.post('/private/upload/chunk', formData);
       
       // 更新进度条，为了视觉效果，在合并前最多显示到99%
       uploadProgress.value.percentage = Math.round(((i + 1) / chunkCount) * 99);
@@ -210,7 +210,7 @@ const handleUpload = async (options) => {
     
     // 步骤2: 所有分片上传完毕后，调用合并接口
     uploadProgress.value.status = '正在合并文件...';
-    await apiClient.post('/upload/merge', {
+    await apiClient.post('/private/upload/merge', {
       batchId: batchId,
       fileName: file.name,
     });
