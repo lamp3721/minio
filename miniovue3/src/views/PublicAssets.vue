@@ -114,7 +114,7 @@ const handlePublicUpload = async (options) => {
 
   try {
     console.log(`【公共资源】向后端发送检查请求，哈希: ${fileHash}`);
-    const checkResponse = await apiClient.post('/public/check', { fileHash });
+    const checkResponse = await apiClient.post('/public/check', { fileHash, fileName: file.name });
     console.log(`【公共资源】收到后端检查响应:`, checkResponse.data);
     if (checkResponse.data.exists) {
       ElMessage.success('文件已存在，秒传成功！');
@@ -178,8 +178,8 @@ const handleDelete = async (file) => {
       type: 'warning',
     });
 
-    // 使用 hashName 删除
-    await apiClient.delete('/public/delete', { params: { fileName: file.hashName } });
+    // 使用 file.path 删除，因为DTO中不包含hashName，path即是MinIO中的完整对象名
+    await apiClient.delete('/public/delete', { params: { fileName: file.path } });
 
     ElMessage.success('文件删除成功！');
     fetchPublicFiles(); // 删除成功后自动刷新列表

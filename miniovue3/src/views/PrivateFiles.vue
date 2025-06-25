@@ -130,7 +130,7 @@ const fetchFileList = async () => {
 
 const handleDownload = async (row) => {
   try {
-    const response = await apiClient.get('/private/download-url', { params: { fileName: row.hashName } });
+    const response = await apiClient.get('/private/download-url', { params: { fileName: row.path } });
     const link = document.createElement('a');
     link.href = response.data;
     link.setAttribute('download', row.name);
@@ -145,7 +145,7 @@ const handleDownload = async (row) => {
 
 const handleCopyLink = async (row) => {
   try {
-    const response = await apiClient.get('/private/download-url', { params: { fileName: row.hashName } });
+    const response = await apiClient.get('/private/download-url', { params: { fileName: row.path } });
     await navigator.clipboard.writeText(response.data);
     ElMessage.success('下载链接已复制到剪贴板！');
   } catch (error) {
@@ -160,7 +160,7 @@ const handleDelete = async (row) => {
     type: 'warning',
   });
   try {
-    await apiClient.delete('/private/delete', { params: { fileName: row.hashName } });
+    await apiClient.delete('/private/delete', { params: { fileName: row.path } });
     ElMessage.success('文件删除成功！');
     fetchFileList();
   } catch (error) {
@@ -237,57 +237,62 @@ const handleUpload = async (options) => {
   }, 1000);
 
   const chunkProgress = new Array(chunkCount).fill(0);
-  const uploadPromises = chunks.map((chunk, i) => {
-    const formData = new FormData();
-    formData.append('file', chunk);
-    formData.append('batchId', batchId);
-    formData.append('chunkNumber', String(i));
-    return apiClient.post('/private/upload/chunk', formData, {
-      onUploadProgress: (progressEvent) => {
-        chunkProgress[i] = progressEvent.loaded;
-        totalLoaded = chunkProgress.reduce((acc, cur) => acc + cur, 0);
-        const currentTime = Date.now();
-        const deltaTime = (currentTime - lastTime) / 1000;
-        const deltaLoaded = totalLoaded - lastLoaded;
-        if (deltaTime > 0.5) {
-          const speed = deltaLoaded / deltaTime;
-          uploadSpeed.value = `${(speed / 1024 / 1024).toFixed(2)} MB/s`;
-          lastTime = currentTime;
-          lastLoaded = totalLoaded;
-        }
-        uploadProgress.value.percentage = Math.min(Math.round((totalLoaded * 100) / file.size), 99);
-        uploadProgress.value.status = `正在上传...`;
-      }
-    });
-  });
-
   try {
-    await Promise.all(uploadPromises);
-    uploadProgress.value.status = '正在合并文件...';
-    await apiClient.post('/private/upload/merge', {
-        batchId: batchId,
-        fileName: file.name,
-        fileHash: fileHash
+    const uploadPromises = chunks.map((chunk, i) => {
+      const formData = new FormData();
+      formData.append('file', chunk);
+      formData.append('batchId', batchId);
+      formData.append('chunkNumber', String(i));
+      return apiClient.post('/private/upload/chunk', formData, {
+        onUploadProgress: (progressEvent) => {
+          chunkProgress[i] = progressEvent.loaded;
+          totalLoaded = chunkProgress.reduce((acc, cur) => acc + cur, 0);
+          const currentTime = Date.now();
+          const deltaTime = (currentTime - lastTime) / 1000;
+          if (deltaTime > 0.5) { // 更新频率控制
+            const deltaLoaded = totalLoaded - lastLoaded;
+            uploadSpeed.value = `${(deltaLoaded / deltaTime / 1024 / 1024).toFixed(2)} MB/s`;
+            lastLoaded = totalLoaded;
+            lastTime = currentTime;
+          }
+          uploadProgress.value.percentage = Math.floor((totalLoaded / file.size) * 100);
+          uploadProgress.value.status = `正在上传... ${uploadProgress.value.percentage}%`;
+        },
+      });
     });
+
+    await Promise.all(uploadPromises);
+    console.log('【私有文件】所有分片上传成功。');
+
+    // **新增：调用合并接口**
+    uploadProgress.value.status = '正在合并文件...';
+    console.log('【私有文件】开始调用合并接口...');
+    await apiClient.post('/private/upload/merge', {
+      batchId: batchId,
+      fileName: file.name,
+      fileHash: fileHash,
+    });
+
+    uploadProgress.value.status = '文件上传成功！';
     uploadProgress.value.percentage = 100;
-    uploadProgress.value.status = '上传成功！';
-    uploadSpeed.value = '';
-    ElMessage.success('文件上传成功!');
+    console.log('【私有文件】文件合并成功。');
+    ElMessage.success('文件上传成功！');
     await fetchFileList();
+
   } catch (error) {
-    uploadProgress.value.status = '上传失败！';
-    ElMessage.error('文件上传失败，服务器将后台自动清理临时文件。');
+    uploadProgress.value.status = '上传失败，请检查网络或联系管理员。';
+    ElMessage.error('上传过程中发生错误！');
+    console.error('【私有文件】上传或合并失败:', error);
   } finally {
     isUploading.value = false;
     clearInterval(uploadTimer.value);
+    uploadSpeed.value = '';
     setTimeout(() => {
-      if (!isUploading.value) {
+      if (!isUploading.value) { // 避免覆盖新的上传状态
         uploadProgress.value = { percentage: 0, status: '' };
-        uploadSpeed.value = '';
-        elapsedTime.value = '';
         if (uploadRef.value) uploadRef.value.clearFiles();
       }
-    }, 3000);
+    }, 5000);
   }
 };
 
