@@ -62,6 +62,7 @@ import { ref, onMounted } from 'vue';
 import axios from 'axios';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { v4 as uuidv4 } from 'uuid';
+import SparkMD5 from 'spark-md5';
 import { API_BASE_URL } from '../api';
 
 // --- Refs and Reactive State ---
@@ -80,6 +81,39 @@ const CHUNK_SIZE = 5 * 1024 * 1024;
 // --- API Client ---
 const apiClient = axios.create({ baseURL: API_BASE_URL });
 
+// --- File Hash Calculation ---
+const calculateFileHash = (file) => {
+  return new Promise((resolve, reject) => {
+    const spark = new SparkMD5.ArrayBuffer();
+    const fileReader = new FileReader();
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    let currentChunk = 0;
+
+    fileReader.onload = (e) => {
+      spark.append(e.target.result);
+      currentChunk++;
+      if (currentChunk < totalChunks) {
+        loadNext();
+      } else {
+        const hash = spark.end();
+        resolve(hash);
+      }
+    };
+
+    fileReader.onerror = () => {
+      reject('文件读取失败');
+    };
+
+    function loadNext() {
+      const start = currentChunk * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, file.size);
+      fileReader.readAsArrayBuffer(file.slice(start, end));
+    }
+
+    loadNext();
+  });
+};
+
 // --- File Operations ---
 const fetchFileList = async () => {
   loading.value = true;
@@ -96,7 +130,7 @@ const fetchFileList = async () => {
 
 const handleDownload = async (row) => {
   try {
-    const response = await apiClient.get('/private/download-url', { params: { fileName: row.name } });
+    const response = await apiClient.get('/private/download-url', { params: { fileName: row.hashName } });
     const link = document.createElement('a');
     link.href = response.data;
     link.setAttribute('download', row.name);
@@ -111,7 +145,7 @@ const handleDownload = async (row) => {
 
 const handleCopyLink = async (row) => {
   try {
-    const response = await apiClient.get('/private/download-url', { params: { fileName: row.name } });
+    const response = await apiClient.get('/private/download-url', { params: { fileName: row.hashName } });
     await navigator.clipboard.writeText(response.data);
     ElMessage.success('下载链接已复制到剪贴板！');
   } catch (error) {
@@ -126,7 +160,7 @@ const handleDelete = async (row) => {
     type: 'warning',
   });
   try {
-    await apiClient.delete('/private/delete', { params: { fileName: row.name } });
+    await apiClient.delete('/private/delete', { params: { fileName: row.hashName } });
     ElMessage.success('文件删除成功！');
     fetchFileList();
   } catch (error) {
@@ -142,6 +176,40 @@ const handleUpload = async (options) => {
     return;
   }
   isUploading.value = true;
+  uploadProgress.value = { percentage: 0, status: '正在计算文件Hash...' };
+
+  let fileHash;
+  try {
+    fileHash = await calculateFileHash(file);
+    uploadProgress.value.status = `文件Hash: ${fileHash}`;
+  } catch (e) {
+    ElMessage.error(e);
+    isUploading.value = false;
+    return;
+  }
+
+  // 检查文件是否已存在 (秒传)
+  try {
+    const checkResponse = await apiClient.post('/private/check', { fileHash: fileHash, fileName: file.name });
+    if (checkResponse.data.exists) {
+        ElMessage.success('文件已存在，秒传成功！');
+        uploadProgress.value = { percentage: 100, status: '秒传成功！' };
+        await fetchFileList(); // 刷新列表
+        isUploading.value = false;
+         setTimeout(() => {
+          if (!isUploading.value) {
+            uploadProgress.value = { percentage: 0, status: '' };
+            if (uploadRef.value) uploadRef.value.clearFiles();
+          }
+        }, 3000);
+        return;
+    }
+  } catch(e) {
+    ElMessage.error('检查文件失败，请稍后重试');
+    isUploading.value = false;
+    return;
+  }
+
   const batchId = uuidv4();
   const chunkCount = Math.ceil(file.size / CHUNK_SIZE);
   const chunks = [];
@@ -189,7 +257,11 @@ const handleUpload = async (options) => {
   try {
     await Promise.all(uploadPromises);
     uploadProgress.value.status = '正在合并文件...';
-    await apiClient.post('/private/upload/merge', { batchId: batchId, fileName: file.name });
+    await apiClient.post('/private/upload/merge', {
+        batchId: batchId,
+        fileName: file.name,
+        fileHash: fileHash
+    });
     uploadProgress.value.percentage = 100;
     uploadProgress.value.status = '上传成功！';
     uploadSpeed.value = '';

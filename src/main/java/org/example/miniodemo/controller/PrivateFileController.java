@@ -2,6 +2,7 @@ package org.example.miniodemo.controller;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.miniodemo.dto.CheckRequestDto;
 import org.example.miniodemo.dto.MergeRequestDto;
 import org.example.miniodemo.service.PrivateFileService;
 import org.springframework.core.io.InputStreamResource;
@@ -15,13 +16,14 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 /**
  * 专用于处理私有文件（Private Files）相关操作的API控制器。
  * <p>
- * “私有文件”是指存储在受限访问存储桶中的对象，必须通过预签名URL或后端代理才能访问，
+ * "私有文件"是指存储在受限访问存储桶中的对象，必须通过预签名URL或后端代理才能访问，
  * 不能直接通过URL公开访问。
  * 此控制器包含了对私有文件进行增、删、查、改（通过重新上传）以及复杂的分片上传和下载的全部功能。
  * 所有此控制器下的端点都以 {@code /minio/private} 为前缀。
@@ -84,18 +86,42 @@ public class PrivateFileController {
     }
 
     /**
+     * POST /check : 检查文件是否已存在（用于秒传）。
+     * <p>
+     * 在上传前，前端会先计算文件的哈希值，然后调用此接口。
+     *
+     * @param checkRequest 包含文件哈希 (fileHash) 和原始文件名 (fileName) 的请求体。
+     * @return {@link ResponseEntity} 返回一个Map，包含一个布尔值 a.
+     */
+    @PostMapping("/check")
+    public ResponseEntity<Map<String, Boolean>> checkFileExists(@RequestBody CheckRequestDto checkRequest) {
+        try {
+            boolean exists = privateFileService.checkFileExists(checkRequest.getFileHash());
+            return ResponseEntity.ok(Collections.singletonMap("exists", exists));
+        } catch (Exception e) {
+            log.error("检查文件失败: {}", e.getMessage(), e);
+            // 出现异常时，为安全起见，返回false，让前端继续走上传流程
+            return ResponseEntity.ok(Collections.singletonMap("exists", false));
+        }
+    }
+
+    /**
      * POST /upload/merge : 通知服务器合并指定批次的所有分片。
      * <p>
      * 这是分片上传流程的最后一步。当前端所有分片都成功调用 {@code /upload/chunk} 后，
      * 调用此接口来触发服务器端的文件合并操作。
      *
-     * @param mergeRequest 包含批次ID (batchId) 和最终文件名 (fileName) 的请求体。
+     * @param mergeRequest 包含批次ID (batchId)、最终文件名 (fileName) 和文件哈希 (fileHash) 的请求体。
      * @return {@link ResponseEntity} 包含操作结果字符串的响应实体。
      */
     @PostMapping("/upload/merge")
     public ResponseEntity<String> mergePrivateChunks(@RequestBody MergeRequestDto mergeRequest) {
         try {
-            privateFileService.mergeChunks(mergeRequest.getBatchId(), mergeRequest.getFileName());
+            privateFileService.mergeChunks(
+                mergeRequest.getBatchId(),
+                mergeRequest.getFileName(),
+                mergeRequest.getFileHash()
+            );
             return ResponseEntity.ok("文件合并成功: " + mergeRequest.getFileName());
         } catch (Exception e) {
             log.error("文件合并失败: {}", e.getMessage(), e);
