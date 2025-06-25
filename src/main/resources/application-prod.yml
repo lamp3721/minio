@@ -1,7 +1,7 @@
 minio:
-  # MinIO的内网访问地址，供后端服务连接使用
+  # MinIO的内网访问地址，供后端服务连接使用，比如上传图片
   endpoint: http://192.168.0.7:900
-  # MinIO的公网访问地址，用于生成分享链接
+  # MinIO的公网访问地址，用于生成分享链接。方便用户拿到链接直接去访问minio服务器
   public-endpoint: http://minio.eeccc.cc
   access-key: AsttK4yHDuh2U8pVfyvQ
   secret-key: WNwwyvJ6TzXEe5uFJVjVIAlC6QEtAwzYT7dKNoa0
