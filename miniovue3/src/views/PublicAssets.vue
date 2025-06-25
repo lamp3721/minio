@@ -54,12 +54,13 @@
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { API_BASE_URL } from '../api'; // 从全局配置文件导入
 
 const loading = ref(false);
 const publicFiles = ref([]);
 
 const apiClient = axios.create({
-  baseURL: '/api/minio',
+  baseURL: API_BASE_URL,
 });
 
 const fetchPublicFiles = async () => {

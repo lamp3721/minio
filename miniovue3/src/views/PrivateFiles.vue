@@ -62,6 +62,7 @@ import { ref, onMounted } from 'vue';
 import axios from 'axios';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { v4 as uuidv4 } from 'uuid';
+import { API_BASE_URL } from '../api';
 
 // --- Refs and Reactive State ---
 const uploadRef = ref(null);
@@ -74,7 +75,6 @@ const elapsedTime = ref('');
 const uploadTimer = ref(null);
 
 // --- Constants ---
-const API_BASE_URL = '/api/minio';
 const CHUNK_SIZE = 5 * 1024 * 1024;
 
 // --- API Client ---
