@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.time.LocalDate;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -46,22 +47,29 @@ public class PrivateFileService {
     private static final String ORIGINAL_FILENAME_META_KEY = "X-Amz-Meta-Original-Filename";
 
     /**
-     * 检查具有特定哈希值的文件是否已存在。
+     * 检查具有特定哈希值的文件是否已存在于当天的路径下。
      *
      * @param fileHash 文件的MD5哈希值。
+     * @param fileName 文件的原始名称。
      * @return 如果文件存在，则为true；否则为false。
      */
-    public boolean checkFileExists(String fileHash) {
-        log.info("【秒传检查 - 私有库】开始检查文件是否存在，哈希: {}", fileHash);
+    public boolean checkFileExists(String fileHash, String fileName) {
+        LocalDate now = LocalDate.now();
+        String year = String.valueOf(now.getYear());
+        String month = String.format("%02d", now.getMonthValue());
+        String day = String.format("%02d", now.getDayOfMonth());
+        String objectName = String.join("/", year, month, day, fileHash, fileName);
+
+        log.info("【秒传检查 - 私有库】开始检查文件是否存在，对象路径: {}", objectName);
         try {
             minioClient.statObject(StatObjectArgs.builder()
                     .bucket(bucketConfig.getPrivateFiles())
-                    .object(fileHash)
+                    .object(objectName)
                     .build());
-            log.info("【秒传检查 - 私有库】文件已存在 (哈希: {})。将触发秒传。", fileHash);
+            log.info("【秒传检查 - 私有库】文件已存在 (对象路径: {})。将触发秒传。", objectName);
             return true;
         } catch (Exception e) {
-            log.info("【秒传检查 - 私有库】文件不存在 (哈希: {})。将执行新上传。", fileHash);
+            log.info("【秒传检查 - 私有库】文件不存在 (对象路径: {})。将执行新上传。", objectName);
             return false;
         }
     }
@@ -70,7 +78,7 @@ public class PrivateFileService {
      * 列出私有存储桶中所有最终合并完成的文件。
      * <p>
      * 此方法会过滤掉分片上传过程中产生的临时文件。
-     * 它通过读取对象的元数据来获取原始文件名。
+     * 它会从文件的完整对象路径中解析出原始文件名。
      *
      * @return 文件信息列表，每个Map包含 "name" (原始文件名) 和 "size"。
      * @throws MinioException 如果发生MinIO相关错误。
@@ -92,25 +100,22 @@ public class PrivateFileService {
                         }
                     })
                     .filter(Objects::nonNull)
-                    .filter(item -> !item.objectName().endsWith(TEMP_FILE_SUFFIX) && !item.objectName().contains("/")) // 过滤掉临时分片目录和文件
+                    // 使用正则表达式匹配 YYYY/MM/DD/hash/filename 格式的路径
+                    // 这样可以精确地只包含最终文件，并排除临时分片（如 batchId/0）和虚拟目录
+                    .filter(item -> item.objectName().matches("^\\d{4}/\\d{2}/\\d{2}/.+/.+"))
                     .map(item -> {
                         try {
-                            // 获取对象的元数据以拿到原始文件名
-                            StatObjectResponse stat = minioClient.statObject(StatObjectArgs.builder()
-                                    .bucket(bucketConfig.getPrivateFiles())
-                                    .object(item.objectName())
-                                    .build());
-                            String originalName = stat.userMetadata().getOrDefault(
-                                    ORIGINAL_FILENAME_META_KEY.substring("X-Amz-Meta-".length()).toLowerCase(), // MinIO SDK key 规范
-                                    item.objectName()
-                            );
+                            String objectName = item.objectName();
+                            // 从对象路径中提取原始文件名
+                            String originalName = objectName.substring(objectName.lastIndexOf('/') + 1);
+
                             Map<String, Object> fileInfo = new HashMap<>();
                             fileInfo.put("name", originalName); // 返回原始文件名
-                            fileInfo.put("hashName", item.objectName()); // 也可选择性返回哈希名
+                            fileInfo.put("hashName", objectName); // 返回完整的对象路径
                             fileInfo.put("size", item.size());
                             return fileInfo;
                         } catch (Exception e) {
-                            log.error("获取对象 '{}' 的元数据失败", item.objectName(), e);
+                            log.error("解析对象 '{}' 信息失败", item.objectName(), e);
                             return null;
                         }
                     })
@@ -183,15 +188,21 @@ public class PrivateFileService {
                 throw new MinioException("找不到任何分片进行合并，批次ID: " + batchId);
             }
 
-            // 2. 将分片合并成一个以 fileHash 命名的对象，并在元数据中存储原始文件名
+            // 2. 构建基于日期的最终对象路径
+            LocalDate now = LocalDate.now();
+            String year = String.valueOf(now.getYear());
+            String month = String.format("%02d", now.getMonthValue());
+            String day = String.format("%02d", now.getDayOfMonth());
+            String finalObjectName = String.join("/", year, month, day, fileHash, originalFileName);
+
+            // 3. 将分片合并成一个新对象
             minioClient.composeObject(ComposeObjectArgs.builder()
                     .bucket(bucketConfig.getPrivateFiles())
-                    .object(fileHash)
+                    .object(finalObjectName)
                     .sources(sources)
-                    .headers(Map.of(ORIGINAL_FILENAME_META_KEY, originalFileName))
                     .build());
 
-            log.info("【文件合并 - 私有库】文件合并成功。对象名 (哈希): '{}'，原始文件名: '{}'。", fileHash, originalFileName);
+            log.info("【文件合并 - 私有库】文件合并成功。最终对象路径: '{}'。", finalObjectName);
             deleteTemporaryChunks(batchId);
 
         } catch (Exception e) {

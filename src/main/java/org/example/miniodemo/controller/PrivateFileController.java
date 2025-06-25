@@ -96,7 +96,7 @@ public class PrivateFileController {
     @PostMapping("/check")
     public ResponseEntity<Map<String, Boolean>> checkFileExists(@RequestBody CheckRequestDto checkRequest) {
         try {
-            boolean exists = privateFileService.checkFileExists(checkRequest.getFileHash());
+            boolean exists = privateFileService.checkFileExists(checkRequest.getFileHash(), checkRequest.getFileName());
             return ResponseEntity.ok(Collections.singletonMap("exists", exists));
         } catch (Exception e) {
             log.error("检查文件失败: {}", e.getMessage(), e);
