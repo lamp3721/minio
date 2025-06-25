@@ -2,6 +2,7 @@ package org.example.miniodemo.controller;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.miniodemo.dto.CheckRequestDto;
 import org.example.miniodemo.service.PublicAssetService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,7 +16,7 @@ import java.util.Map;
 /**
  * 专用于处理公共资源（Public Assets）相关操作的API控制器。
  * <p>
- * “公共资源”是指存储在公开访问存储桶中的对象，通常是图片、CSS、JS文件等，
+ * "公共资源"是指存储在公开访问存储桶中的对象，通常是图片、CSS、JS文件等，
  * 可以通过直接的URL链接被浏览器或客户端访问，无需签名。
  * 所有此控制器下的端点都以 {@code /minio/public} 为前缀。
  */
@@ -46,17 +47,38 @@ public class PublicAssetController {
     }
 
     /**
+     * POST /check : 检查文件是否已存在（用于秒传）。
+     *
+     * @param checkRequest 包含文件哈希 (fileHash) 的请求体。
+     * @return {@link ResponseEntity} 返回一个Map，包含一个布尔值 "exists"。
+     */
+    @PostMapping("/check")
+    public ResponseEntity<Map<String, Boolean>> checkFileExists(@RequestBody CheckRequestDto checkRequest) {
+        try {
+            boolean exists = publicAssetService.checkFileExists(checkRequest.getFileHash());
+            return ResponseEntity.ok(Collections.singletonMap("exists", exists));
+        } catch (Exception e) {
+            log.error("检查公共文件失败: {}", e.getMessage(), e);
+            return ResponseEntity.ok(Collections.singletonMap("exists", false));
+        }
+    }
+
+    /**
      * POST /upload : 上传一个公开的图片文件。
      *
      * @param file 由multipart/form-data请求体中名为 "file" 的部分承载的上传文件。不能为空。
+     * @param fileHash 文件的MD5哈希值。
      * @return {@link ResponseEntity} 包含上传成功后文件的永久公开访问URL的响应实体。
      *         成功时返回URL字符串和HTTP状态码200 (OK)。
      *         失败时返回错误信息和HTTP状态码500 (Internal Server Error)。
      */
     @PostMapping("/upload")
-    public ResponseEntity<String> uploadPublicImage(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<String> uploadPublicImage(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("fileHash") String fileHash
+    ) {
         try {
-            String url = publicAssetService.uploadPublicImage(file);
+            String url = publicAssetService.uploadPublicImage(file, fileHash);
             return ResponseEntity.ok(url);
         } catch (Exception e) {
             log.error("上传公共图片失败", e);

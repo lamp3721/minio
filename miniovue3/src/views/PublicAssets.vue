@@ -15,10 +15,13 @@
         <el-button type="primary">点击上传</el-button>
         <template #tip>
           <div class="el-upload__tip">
-            只能上传图片文件，文件将公开访问。
+            只能上传图片文件，文件将公开访问。支持秒传。
           </div>
         </template>
       </el-upload>
+       <div v-if="uploadStatus" class="upload-status">
+        {{ uploadStatus }}
+      </div>
     </el-card>
 
     <el-card class="box-card">
@@ -54,14 +57,29 @@
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import SparkMD5 from 'spark-md5';
 import { API_BASE_URL } from '../api'; // 从全局配置文件导入
 
 const loading = ref(false);
 const publicFiles = ref([]);
+const uploadStatus = ref('');
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
 });
+
+const calculateFileHash = (file) => {
+  return new Promise((resolve, reject) => {
+    const spark = new SparkMD5.ArrayBuffer();
+    const fileReader = new FileReader();
+    fileReader.onload = (e) => {
+      spark.append(e.target.result);
+      resolve(spark.end());
+    };
+    fileReader.onerror = () => reject('文件读取失败');
+    fileReader.readAsArrayBuffer(file);
+  });
+};
 
 const fetchPublicFiles = async () => {
   loading.value = true;
@@ -78,16 +96,50 @@ const fetchPublicFiles = async () => {
 };
 
 const handlePublicUpload = async (options) => {
-  const formData = new FormData();
-  formData.append('file', options.file);
+  const file = options.file;
+  uploadStatus.value = '正在计算文件Hash...';
+
+  let fileHash;
+  try {
+    fileHash = await calculateFileHash(file);
+    uploadStatus.value = `文件Hash: ${fileHash}`;
+  } catch (e) {
+    ElMessage.error(e);
+    uploadStatus.value = 'Hash计算失败！';
+    return;
+  }
 
   try {
+    const checkResponse = await apiClient.post('/public/check', { fileHash });
+    if (checkResponse.data.exists) {
+      ElMessage.success('文件已存在，秒传成功！');
+      uploadStatus.value = '秒传成功！';
+      fetchPublicFiles();
+      setTimeout(() => uploadStatus.value = '', 3000);
+      return;
+    }
+  } catch (e) {
+    ElMessage.error('检查文件失败，请稍后重试');
+    uploadStatus.value = '检查文件失败！';
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('fileHash', fileHash);
+
+  try {
+    uploadStatus.value = '正在上传...';
     await apiClient.post('/public/upload', formData);
     ElMessage.success('图片上传成功！');
+    uploadStatus.value = '上传成功！';
     fetchPublicFiles(); // 刷新列表
   } catch (error) {
     ElMessage.error('图片上传失败！');
+    uploadStatus.value = '上传失败！';
     console.error(error);
+  } finally {
+      setTimeout(() => uploadStatus.value = '', 3000);
   }
 };
 
@@ -119,8 +171,8 @@ const handleDelete = async (file) => {
       type: 'warning',
     });
 
-    // 用户确认后，向后端发送删除请求
-    await apiClient.delete('/public/delete', { params: { fileName: file.name } });
+    // 使用 hashName 删除
+    await apiClient.delete('/public/delete', { params: { fileName: file.hashName } });
 
     ElMessage.success('文件删除成功！');
     fetchPublicFiles(); // 删除成功后自动刷新列表
@@ -133,7 +185,6 @@ const handleDelete = async (file) => {
     }
   }
 };
-
 
 onMounted(() => {
   fetchPublicFiles();

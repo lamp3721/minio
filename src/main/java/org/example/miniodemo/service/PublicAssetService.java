@@ -5,11 +5,15 @@ import io.minio.MinioClient;
 import io.minio.RemoveObjectArgs;
 import io.minio.Result;
 import io.minio.PutObjectArgs;
+import io.minio.StatObjectArgs;
+import io.minio.StatObjectResponse;
+import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.messages.Item;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.config.MinioBucketConfig;
 import org.example.miniodemo.config.MinioConfig;
+import org.example.miniodemo.controller.PublicAssetController;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -20,6 +24,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+import java.util.Objects;
 
 /**
  * 专用于处理公共资源（Public Assets）相关操作的服务层。
@@ -37,6 +42,25 @@ public class PublicAssetService {
     private final MinioClient minioClient;
     private final MinioBucketConfig bucketConfig;
     private final MinioConfig minioConfig;
+    private static final String ORIGINAL_FILENAME_META_KEY = "X-Amz-Meta-Original-Filename";
+
+    /**
+     * 检查文件是否存在。
+     *
+     * @param fileHash 文件的哈希值。
+     * @return 如果文件存在，则返回true；否则返回false。
+     */
+    public boolean checkFileExists(String fileHash) {
+        try {
+            minioClient.statObject(StatObjectArgs.builder()
+                    .bucket(bucketConfig.getPublicAssets())
+                    .object(fileHash)
+                    .build());
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
 
     /**
      * 获取公共存储桶中所有文件的列表，并为每个文件生成可直接访问的URL。
@@ -46,24 +70,37 @@ public class PublicAssetService {
      */
     public List<Map<String, Object>> listPublicFiles() throws Exception {
         Iterable<Result<Item>> results = minioClient.listObjects(
-                ListObjectsArgs.builder().bucket(bucketConfig.getPublicAssets()).build());
+                ListObjectsArgs.builder().bucket(bucketConfig.getPublicAssets()).recursive(true).build()
+        );
 
         String baseUrl = minioConfig.getEndpoint() + "/" + bucketConfig.getPublicAssets() + "/";
 
         return StreamSupport.stream(results.spliterator(), false)
-                .map(result -> {
+                .map(itemResult -> {
                     try {
-                        Item item = result.get();
-                        Map<String, Object> fileData = new HashMap<>();
-                        fileData.put("name", item.objectName());
-                        fileData.put("url", baseUrl + item.objectName());
-                        return fileData;
+                        Item item = itemResult.get();
+                        StatObjectResponse stat = minioClient.statObject(StatObjectArgs.builder()
+                                .bucket(bucketConfig.getPublicAssets())
+                                .object(item.objectName())
+                                .build());
+
+                        String originalName = stat.userMetadata().getOrDefault(
+                                ORIGINAL_FILENAME_META_KEY.substring("X-Amz-Meta-".length()).toLowerCase(),
+                                item.objectName()
+                        );
+
+                        Map<String, Object> fileInfo = new HashMap<>();
+                        fileInfo.put("name", originalName);
+                        fileInfo.put("hashName", item.objectName());
+                        fileInfo.put("url", baseUrl + item.objectName());
+
+                        return fileInfo;
                     } catch (Exception e) {
-                        log.error("Error getting item from MinIO for public list", e);
+                        log.error("获取公共文件 '{}' 信息失败", itemResult.toString(), e);
                         return null;
                     }
                 })
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
     }
 
@@ -73,32 +110,38 @@ public class PublicAssetService {
      * 文件名将由UUID和原始文件名拼接而成，以避免命名冲突。
      *
      * @param file 需要上传的图片文件 ({@link MultipartFile})。
+     * @param fileHash 文件的哈希值。
      * @return 文件的永久公开访问URL。
      * @throws Exception 如果与MinIO服务器通信时发生错误或文件上传失败。
      */
-    public String uploadPublicImage(MultipartFile file) throws Exception {
-        String objectName = UUID.randomUUID() + "-" + file.getOriginalFilename();
+    public String uploadPublicImage(MultipartFile file, String fileHash) throws Exception {
         try (InputStream inputStream = file.getInputStream()) {
             minioClient.putObject(
                     PutObjectArgs.builder()
                             .bucket(bucketConfig.getPublicAssets())
-                            .object(objectName)
+                            .object(fileHash)
                             .stream(inputStream, file.getSize(), -1)
                             .contentType(file.getContentType())
+                            .headers(Map.of(ORIGINAL_FILENAME_META_KEY, file.getOriginalFilename()))
                             .build()
             );
         }
-        return minioConfig.getEndpoint() + "/" + bucketConfig.getPublicAssets() + "/" + objectName;
+
+        return minioConfig.getEndpoint() + "/" + bucketConfig.getPublicAssets() + "/" + fileHash;
     }
 
     /**
      * 从公共存储桶中删除一个文件。
      *
-     * @param fileName 需要删除的文件的名称（对象名）。
+     * @param objectName 需要删除的文件的名称（对象名）。
      * @throws Exception 如果与MinIO服务器通信时发生错误或删除操作失败。
      */
-    public void deletePublicFile(String fileName) throws Exception {
+    public void deletePublicFile(String objectName) throws Exception {
         minioClient.removeObject(
-                RemoveObjectArgs.builder().bucket(bucketConfig.getPublicAssets()).object(fileName).build());
+                RemoveObjectArgs.builder()
+                        .bucket(bucketConfig.getPublicAssets())
+                        .object(objectName)
+                        .build()
+        );
     }
 } 
