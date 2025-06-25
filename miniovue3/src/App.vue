@@ -27,8 +27,11 @@
         </template>
       </el-upload>
       <div v-if="uploadProgress.percentage > 0" class="progress-container">
-         <el-progress :percentage="uploadProgress.percentage" :text-inside="true" :stroke-width="20"/>
-         <span>{{ uploadProgress.status }}</span>
+         <el-progress :percentage="uploadProgress.percentage" :text-inside="true" :stroke-width="20" class="progress-bar"/>
+         <div class="progress-info">
+           <span>{{ uploadProgress.status }}</span>
+           <span v-if="uploadSpeed" class="upload-speed">{{ uploadSpeed }}</span>
+         </div>
       </div>
     </el-card>
 
@@ -73,6 +76,10 @@ const uploadProgress = ref({
   percentage: 0, // 进度百分比
   status: '',     // 当前状态的描述文本
 });
+// 新增：用于存储实时上传速度的 ref
+const uploadSpeed = ref('');
+// 新增：用于判断是否正在上传中
+const isUploading = ref(false);
 
 // --- Constants: 常量定义 ---
 
@@ -177,66 +184,92 @@ const handleDelete = async (row) => {
  */
 const handleUpload = async (options) => {
   const file = options.file;
-  // 为本次上传生成一个唯一的批次ID
+  if (isUploading.value) {
+    ElMessage.warning('已有文件正在上传中，请稍后再试。');
+    return;
+  }
+  isUploading.value = true;
+  
   const batchId = uuidv4();
-  // 计算总分片数
   const chunkCount = Math.ceil(file.size / CHUNK_SIZE);
+  const chunks = [];
+  for (let i = 0; i < chunkCount; i++) {
+    const start = i * CHUNK_SIZE;
+    const end = Math.min(start + CHUNK_SIZE, file.size);
+    chunks.push(file.slice(start, end));
+  }
 
-  // 初始化进度条
-  uploadProgress.value = { percentage: 0, status: '开始上传...' };
+  uploadProgress.value = { percentage: 0, status: '正在计算文件...' };
+  uploadSpeed.value = '';
+
+  let lastLoaded = 0;
+  let lastTime = Date.now();
+  let totalLoaded = 0;
+
+  const chunkProgress = new Array(chunkCount).fill(0);
+
+  const uploadPromises = chunks.map((chunk, i) => {
+    const formData = new FormData();
+    formData.append('file', chunk);
+    formData.append('batchId', batchId);
+    formData.append('chunkNumber', String(i));
+
+    return apiClient.post('/private/upload/chunk', formData, {
+      onUploadProgress: (progressEvent) => {
+        chunkProgress[i] = progressEvent.loaded;
+        totalLoaded = chunkProgress.reduce((acc, cur) => acc + cur, 0);
+
+        const currentTime = Date.now();
+        const deltaTime = (currentTime - lastTime) / 1000;
+        const deltaLoaded = totalLoaded - lastLoaded;
+
+        if (deltaTime > 0.5) { // 每0.5秒更新一次速度显示
+          const speed = deltaLoaded / deltaTime;
+          uploadSpeed.value = `${(speed / 1024 / 1024).toFixed(2)} MB/s`;
+          lastTime = currentTime;
+          lastLoaded = totalLoaded;
+        }
+
+        uploadProgress.value.percentage = Math.min(Math.round((totalLoaded * 100) / file.size), 99);
+        uploadProgress.value.status = `正在上传...`;
+      }
+    });
+  });
 
   try {
-    // 步骤1: 循环上传每一个分片
-    for (let i = 0; i < chunkCount; i++) {
-      const start = i * CHUNK_SIZE;
-      const end = Math.min(start + CHUNK_SIZE, file.size);
-      // 在前端对文件进行切片
-      const chunk = file.slice(start, end);
+    await Promise.all(uploadPromises);
 
-      // 创建 FormData 对象来包装分片数据
-      const formData = new FormData();
-      formData.append('file', chunk);
-      formData.append('batchId', batchId);
-      formData.append('chunkNumber', i);
-      
-      // 更新上传状态文本
-      uploadProgress.value.status = `正在上传分片 ${i + 1}/${chunkCount}`;
-      // 调用后端的分片上传接口
-      await apiClient.post('/private/upload/chunk', formData);
-      
-      // 更新进度条，为了视觉效果，在合并前最多显示到99%
-      uploadProgress.value.percentage = Math.round(((i + 1) / chunkCount) * 99);
-    }
-    
-    // 步骤2: 所有分片上传完毕后，调用合并接口
     uploadProgress.value.status = '正在合并文件...';
     await apiClient.post('/private/upload/merge', {
       batchId: batchId,
       fileName: file.name,
     });
     
-    // 步骤3: 合并成功，上传完成
     uploadProgress.value.percentage = 100;
     uploadProgress.value.status = '上传成功！';
+    uploadSpeed.value = '';
     ElMessage.success('文件上传成功!');
-    await fetchFileList(); // 刷新文件列表
+    await fetchFileList();
   } catch (error) {
     console.error('文件上传或合并过程中发生错误:', error);
     uploadProgress.value.status = '上传失败！';
     ElMessage.error('文件上传失败，服务器将在后台自动清理临时文件，请稍后重试。');
   } finally {
-     // 6. 无论成功或失败，3秒后重置上传组件和进度条
-     setTimeout(() => {
+    isUploading.value = false;
+    setTimeout(() => {
+      if (!isUploading.value) { // 再次检查，避免覆盖新的上传进度
         uploadProgress.value = { percentage: 0, status: '' };
+        uploadSpeed.value = '';
         if (uploadRef.value) {
-            uploadRef.value.clearFiles(); // 清空 el-upload 的文件列表
+            uploadRef.value.clearFiles();
         }
+      }
     }, 3000);
   }
 };
 
 /**
- * 处理 el-upload 文件列表中的文件被移除时的钩子 (此处未使用)
+ * 处理 el-upload 文件列表中的文件被移除时的钩子
  */
 const handleRemove = () => {
   // 可以根据需要添加逻辑
@@ -310,5 +343,21 @@ onMounted(() => {
     display: flex;
     align-items: center;
     gap: 15px;
+}
+
+.progress-bar {
+  flex-grow: 1;
+}
+
+.progress-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 120px;
+}
+
+.upload-speed {
+  font-size: 12px;
+  color: #909399;
 }
 </style>
