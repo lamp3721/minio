@@ -50,7 +50,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 
 const loading = ref(false);
 const publicFiles = ref([]);
@@ -96,8 +96,27 @@ const beforeImageUpload = (file) => {
 };
 
 const handleDelete = async (file) => {
-    // ... (删除逻辑，需要后端支持)
-    ElMessage.info('删除功能待实现');
+  try {
+    // 弹出确认对话框，防止用户误操作
+    await ElMessageBox.confirm(`确定要删除公开文件 "${file.name}" 吗？此操作不可恢复。`, '警告', {
+      confirmButtonText: '确定删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    });
+
+    // 用户确认后，向后端发送删除请求
+    await apiClient.delete('/public/delete', { params: { fileName: file.name } });
+
+    ElMessage.success('文件删除成功！');
+    fetchPublicFiles(); // 删除成功后自动刷新列表
+  } catch (error) {
+    if (error !== 'cancel') { // 'cancel' 是用户主动点击取消时 a
+      ElMessage.error('文件删除失败！');
+      console.error('删除公共文件时出错:', error);
+    } else {
+      ElMessage.info('已取消删除操作。');
+    }
+  }
 };
 
 

@@ -213,7 +213,19 @@ public class MinioService {
                 .expiry(1)
                 .build()
         );
+        // 移除签名参数，返回一个干净的、永久的URL
         return endpoint.substring(0, endpoint.indexOf('?'));
+    }
+
+    /**
+     * 删除一个公共文件。
+     *
+     * @param fileName 需要删除的文件名
+     * @throws Exception 如果与 MinIO 通信时发生错误
+     */
+    public void deletePublicFile(String fileName) throws Exception {
+        minioClient.removeObject(
+                RemoveObjectArgs.builder().bucket(bucketConfig.getPublicAssets()).object(fileName).build());
     }
 
     /**

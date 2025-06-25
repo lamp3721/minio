@@ -207,4 +207,20 @@ public class FileController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("上传失败");
         }
     }
+
+    /**
+     * 删除一个公共文件。
+     * @param fileName 文件名
+     * @return 删除结果
+     */
+    @DeleteMapping("/public/delete")
+    public ResponseEntity<String> deletePublicFile(@RequestParam("fileName") String fileName) {
+        try {
+            minioService.deletePublicFile(fileName);
+            return ResponseEntity.ok("文件删除成功: " + fileName);
+        } catch (Exception e) {
+            log.error("删除公共文件失败: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("删除失败: " + e.getMessage());
+        }
+    }
 }
