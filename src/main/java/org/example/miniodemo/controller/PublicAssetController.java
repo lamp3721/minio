@@ -56,7 +56,8 @@ public class PublicAssetController {
     @PostMapping("/check")
     public ResponseEntity<FileExistsDto> checkFileExists(@RequestBody CheckRequestDto checkRequest) {
         try {
-            boolean exists = publicAssetService.checkFileExists(checkRequest.getFileHash(), checkRequest.getFileName());
+            // 检查文件是否存在判读hash
+            boolean exists = publicAssetService.checkFileExists(checkRequest.getFileHash(),"PUBLIC");
             return ResponseEntity.ok(new FileExistsDto(exists));
         } catch (Exception e) {
             log.error("检查公共文件失败: {}", e.getMessage(), e);

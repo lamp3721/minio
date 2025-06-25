@@ -1,5 +1,7 @@
 package org.example.miniodemo.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import io.minio.ListObjectsArgs;
 import io.minio.MinioClient;
 import io.minio.RemoveObjectArgs;
@@ -14,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.config.MinioBucketConfig;
 import org.example.miniodemo.config.MinioConfig;
 import org.example.miniodemo.controller.PublicAssetController;
+import org.example.miniodemo.domain.FileMetadata;
 import org.example.miniodemo.dto.FileDetailDto;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -44,13 +47,17 @@ public class PublicAssetService {
     private final MinioBucketConfig bucketConfig;
     private final MinioConfig minioConfig;
 
+    private final FileMetadataService fileMetadataService;
+
     public PublicAssetService(
             @Qualifier("internalMinioClient") MinioClient minioClient,
             MinioBucketConfig bucketConfig,
-            MinioConfig minioConfig) {
+            MinioConfig minioConfig,
+            FileMetadataService fileMetadataService) {
         this.minioClient = minioClient;
         this.bucketConfig = bucketConfig;
         this.minioConfig = minioConfig;
+        this.fileMetadataService = fileMetadataService;
     }
 
     /**
@@ -63,25 +70,17 @@ public class PublicAssetService {
      * @param fileName 文件的原始名称。
      * @return 如果文件存在，则返回true；否则返回false。
      */
-    public boolean checkFileExists(String fileHash, String fileName) {
-        LocalDate now = LocalDate.now();
-        String year = String.valueOf(now.getYear());
-        String month = String.format("%02d", now.getMonthValue());
-        String day = String.format("%02d", now.getDayOfMonth());
-        String objectName = String.join("/", year, month, day, fileHash, fileName);
-
-        log.info("【秒传检查 - 公共库】开始检查文件是否存在，对象路径: {}", objectName);
-        try {
-            minioClient.statObject(StatObjectArgs.builder()
-                    .bucket(bucketConfig.getPublicAssets())
-                    .object(objectName)
-                    .build());
-            log.info("【秒传检查 - 公共库】文件已存在 (对象路径: {})。将触发秒传。", objectName);
+    public boolean checkFileExists(String fileHash, String storageType) {
+        LambdaQueryWrapper<FileMetadata> eq = new LambdaQueryWrapper<FileMetadata>()
+                .eq(FileMetadata::getContentHash, fileHash)
+                .eq(FileMetadata::getStorageType, storageType);
+        FileMetadata fileMetadata = fileMetadataService.getOne(eq);
+        if (fileMetadata != null) {
+            log.info("【秒传检查 - 公开库】文件已存在 (hash:{})。将触发秒传。", fileHash);
             return true;
-        } catch (Exception e) {
-            log.info("【秒传检查 - 公共库】文件不存在 (对象路径: {})。将执行新上传。", objectName);
-            return false;
         }
+        log.info("【秒传检查 - 公开库】文件不存在 (hash:{})。将执行新上传。", fileHash);
+        return false;
     }
 
     /**
@@ -102,7 +101,7 @@ public class PublicAssetService {
                     try {
                         Item item = itemResult.get();
                         String objectName = item.objectName();
-                        
+
                         // 从对象路径中提取原始文件名
                         String originalName = objectName.substring(objectName.lastIndexOf('/') + 1);
 
@@ -126,7 +125,7 @@ public class PublicAssetService {
      * <p>
      * 文件将存储在基于日期的路径下：/年/月/日/文件哈希/原始文件名
      *
-     * @param file 需要上传的图片文件 ({@link MultipartFile})。
+     * @param file     需要上传的图片文件 ({@link MultipartFile})。
      * @param fileHash 文件的哈希值。
      * @return 文件的永久公开访问URL。
      * @throws Exception 如果与MinIO服务器通信时发生错误或文件上传失败。
@@ -149,9 +148,25 @@ public class PublicAssetService {
                             .contentType(file.getContentType())
                             .build()
             );
+
+
             log.info("【文件上传 - 公共库】文件上传成功。对象路径: '{}'。", objectName);
         }
+        //保存hash到数据库
+        FileMetadata metadata = new FileMetadata();
+        metadata.setObjectName(objectName);
+        metadata.setOriginalFilename(originalFileName);
+        metadata.setFileSize(file.getSize());
+        metadata.setContentType(file.getContentType());
+        metadata.setContentHash(fileHash);
+        metadata.setBucketName(bucketConfig.getPublicAssets());
+        metadata.setStorageType("PUBLIC");
 
+        boolean save = fileMetadataService.save(metadata);
+
+        if (!save) {
+            log.error("【文件上传 - 公共库】保存文件元数据失败。对象路径: '{}'。", objectName);
+        }
         return minioConfig.getPublicEndpoint() + "/" + bucketConfig.getPublicAssets() + "/" + objectName;
     }
 
@@ -162,6 +177,12 @@ public class PublicAssetService {
      * @throws Exception 如果与MinIO服务器通信时发生错误或删除操作失败。
      */
     public void deletePublicFile(String objectName) throws Exception {
+        //2025/06/25/2f5f14c364579bc394893eb16bd9311b/63.gif
+        //从当中解析出hash
+        String hash = extractHash(objectName);
+        //删除元数据
+        fileMetadataService.remove(new LambdaQueryWrapper<FileMetadata>().eq(FileMetadata::getContentHash, hash).eq(FileMetadata::getStorageType, "PUBLIC"));
+
         minioClient.removeObject(
                 RemoveObjectArgs.builder()
                         .bucket(bucketConfig.getPublicAssets())
@@ -169,4 +190,14 @@ public class PublicAssetService {
                         .build()
         );
     }
-} 
+
+
+    public String extractHash(String path) {
+        String[] parts = path.split("/");
+        if (parts.length < 2) {
+            return null; // 或抛异常，路径格式不对
+        }
+        // 倒数第二段是哈希
+        return parts[parts.length - 2];
+    }
+}

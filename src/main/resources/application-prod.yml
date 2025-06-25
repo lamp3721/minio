@@ -12,3 +12,16 @@ minio:
 
   access-key: AsttK4yHDuh2U8pVfyvQ
   secret-key: WNwwyvJ6TzXEe5uFJVjVIAlC6QEtAwzYT7dKNoa0
+
+
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/minio?useSSL=false&serverTimezone=UTC
+    username: root
+    password: 123456
+    driver-class-name: com.mysql.cj.jdbc.Driver
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl  # 或 slf4j
+  mapper-locations: classpath:mapper/*.xml  # 若使用 XML Mapper

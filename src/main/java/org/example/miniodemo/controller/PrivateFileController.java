@@ -2,6 +2,7 @@ package org.example.miniodemo.controller;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.miniodemo.domain.FileMetadata;
 import org.example.miniodemo.dto.CheckRequestDto;
 import org.example.miniodemo.dto.FileDetailDto;
 import org.example.miniodemo.dto.FileExistsDto;
@@ -44,7 +45,7 @@ public class PrivateFileController {
      * 此接口会过滤掉用于分片上传的临时文件，只返回最终合并完成的完整文件。
      *
      * @return {@link ResponseEntity} 包含文件信息DTO列表的响应实体。
-     *         成功时返回列表和HTTP 200，失败时返回错误信息和HTTP 500。
+     * 成功时返回列表和HTTP 200，失败时返回错误信息和HTTP 500。
      */
     @GetMapping("/list")
     public ResponseEntity<List<FileDetailDto>> listPrivateFiles() {
@@ -72,11 +73,11 @@ public class PrivateFileController {
             @RequestParam("file") MultipartFile file,
             @RequestParam("batchId") String batchId,
             @RequestParam("chunkNumber") Integer chunkNumber) {
-        
+
         if (file.isEmpty() || batchId.isBlank()) {
             return ResponseEntity.badRequest().body("文件、批次ID或分片序号不能为空");
         }
-        
+
         try {
             privateFileService.uploadChunk(file, batchId, chunkNumber);
             return ResponseEntity.ok("分片 " + chunkNumber + " 上传成功");
@@ -97,7 +98,7 @@ public class PrivateFileController {
     @PostMapping("/check")
     public ResponseEntity<FileExistsDto> checkFileExists(@RequestBody CheckRequestDto checkRequest) {
         try {
-            boolean exists = privateFileService.checkFileExists(checkRequest.getFileHash(), checkRequest.getFileName());
+            boolean exists = privateFileService.checkFileExists(checkRequest.getFileHash(), "PRIVATE");
             return ResponseEntity.ok(new FileExistsDto(exists));
         } catch (Exception e) {
             log.error("检查文件失败: {}", e.getMessage(), e);
@@ -119,10 +120,14 @@ public class PrivateFileController {
     public ResponseEntity<String> mergePrivateChunks(@RequestBody MergeRequestDto mergeRequest) {
         try {
             privateFileService.mergeChunks(
-                mergeRequest.getBatchId(),
-                mergeRequest.getFileName(),
-                mergeRequest.getFileHash()
+                    mergeRequest.getBatchId(),
+                    mergeRequest.getFileName(),
+                    mergeRequest.getFileHash(),
+
+                    mergeRequest.getContentType(),
+                    mergeRequest.getFileSize()
             );
+
             return ResponseEntity.ok("文件合并成功: " + mergeRequest.getFileName());
         } catch (Exception e) {
             log.error("文件合并失败: {}", e.getMessage(), e);

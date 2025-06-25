@@ -1,5 +1,6 @@
 package org.example.miniodemo.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.minio.*;
 import io.minio.http.Method;
 import io.minio.messages.DeleteError;
@@ -11,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.config.MinioBucketConfig;
 import org.example.miniodemo.config.MinioConfig;
 import org.example.miniodemo.controller.PrivateFileController;
+import org.example.miniodemo.domain.FileMetadata;
 import org.example.miniodemo.dto.FileDetailDto;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -48,15 +50,18 @@ public class PrivateFileService {
     private final MinioBucketConfig bucketConfig;
     private final MinioConfig minioConfig;
 
+    private final FileMetadataService fileMetadataService;
+
     public PrivateFileService(
             @Qualifier("internalMinioClient") MinioClient internalMinioClient,
             @Qualifier("publicMinioClient") MinioClient publicMinioClient,
             MinioBucketConfig bucketConfig,
-            MinioConfig minioConfig) {
+            MinioConfig minioConfig, FileMetadataService fileMetadataService) {
         this.internalMinioClient = internalMinioClient;
         this.publicMinioClient = publicMinioClient;
         this.bucketConfig = bucketConfig;
         this.minioConfig = minioConfig;
+        this.fileMetadataService = fileMetadataService;
     }
 
     /**
@@ -66,25 +71,18 @@ public class PrivateFileService {
      * @param fileName 文件的原始名称。
      * @return 如果文件存在，则为true；否则为false。
      */
-    public boolean checkFileExists(String fileHash, String fileName) {
-        LocalDate now = LocalDate.now();
-        String year = String.valueOf(now.getYear());
-        String month = String.format("%02d", now.getMonthValue());
-        String day = String.format("%02d", now.getDayOfMonth());
-        String objectName = String.join("/", year, month, day, fileHash, fileName);
+    public boolean checkFileExists(String fileHash, String storageType) {
 
-        log.info("【秒传检查 - 私有库】开始检查文件是否存在，对象路径: {}", objectName);
-        try {
-            internalMinioClient.statObject(StatObjectArgs.builder()
-                    .bucket(bucketConfig.getPrivateFiles())
-                    .object(objectName)
-                    .build());
-            log.info("【秒传检查 - 私有库】文件已存在 (对象路径: {})。将触发秒传。", objectName);
+        LambdaQueryWrapper<FileMetadata> eq = new LambdaQueryWrapper<FileMetadata>()
+                .eq(FileMetadata::getContentHash, fileHash)
+                .eq(FileMetadata::getStorageType, storageType);
+        FileMetadata fileMetadata = fileMetadataService.getOne(eq);
+        if (fileMetadata != null) {
+            log.info("【秒传检查 - 私有库】文件已存在 (hash:{})。将触发秒传。", fileHash);
             return true;
-        } catch (Exception e) {
-            log.info("【秒传检查 - 私有库】文件不存在 (对象路径: {})。将执行新上传。", objectName);
-            return false;
         }
+        log.info("【秒传检查 - 私有库】文件不存在 (hash:{})。将执行新上传。", fileHash);
+        return false;
     }
 
     /**
@@ -141,32 +139,6 @@ public class PrivateFileService {
     }
 
     /**
-     * 上传一个文件分片到MinIO。
-     * <p>
-     * 分片会被存储为一个临时对象，其对象名遵循特定格式：
-     * {@code [batchId]/[fileName].chunk_[chunkNumber]}
-     * 例如："abc-123/my-video.mp4.chunk_0"
-     * 这种命名方式便于后续的合并操作识别和排序。
-     *
-     * @param file        文件分片的二进制数据。
-     * @param batchId     唯一标识此次上传任务的批次ID。
-     * @param chunkNumber 当前分片的序号（从0开始）。
-     * @throws Exception 如果上传过程中发生IO错误或与MinIO通信失败。
-     */
-    public void uploadChunk(MultipartFile file, String batchId, Integer chunkNumber) throws Exception {
-        String objectName = batchId + "/" + chunkNumber;
-        try (InputStream inputStream = file.getInputStream()) {
-            internalMinioClient.putObject(
-                    PutObjectArgs.builder()
-                            .bucket(bucketConfig.getPrivateFiles())
-                            .object(objectName)
-                            .stream(inputStream, file.getSize(), -1)
-                            .build()
-            );
-        }
-    }
-
-    /**
      * 合并所有分片。
      *
      * @param batchId          批次ID。
@@ -174,7 +146,7 @@ public class PrivateFileService {
      * @param fileHash         文件的MD5哈希值，将作为最终的对象名。
      * @throws MinioException 如果合并过程中发生错误。
      */
-    public void mergeChunks(String batchId, String originalFileName, String fileHash) throws Exception {
+    public void mergeChunks(String batchId, String originalFileName, String fileHash, String contentType, Long fileSize) throws Exception {
         try {
             // 1. 列出该批次的所有分片
             List<ComposeSource> sources = StreamSupport.stream(
@@ -215,12 +187,49 @@ public class PrivateFileService {
                     .sources(sources)
                     .build());
 
+            // 5. 记录元信息
+            FileMetadata metadata = new FileMetadata();
+            metadata.setObjectName(finalObjectName);
+            metadata.setOriginalFilename(originalFileName);
+            metadata.setFileSize(fileSize);
+            metadata.setContentType(contentType);
+            metadata.setContentHash(fileHash);
+            metadata.setBucketName(bucketConfig.getPrivateFiles());
+            metadata.setStorageType("PRIVATE");
+            fileMetadataService.save(metadata);
+
             log.info("【文件合并 - 私有库】文件合并成功。最终对象路径: '{}'。", finalObjectName);
             deleteTemporaryChunks(batchId);
 
         } catch (Exception e) {
             log.error("合并文件失败，批次ID: {}", batchId, e);
             throw new MinioException("合并文件失败");
+        }
+    }
+
+    /**
+     * 上传一个文件分片到MinIO。
+     * <p>
+     * 分片会被存储为一个临时对象，其对象名遵循特定格式：
+     * {@code [batchId]/[fileName].chunk_[chunkNumber]}
+     * 例如："abc-123/my-video.mp4.chunk_0"
+     * 这种命名方式便于后续的合并操作识别和排序。
+     *
+     * @param file        文件分片的二进制数据。
+     * @param batchId     唯一标识此次上传任务的批次ID。
+     * @param chunkNumber 当前分片的序号（从0开始）。
+     * @throws Exception 如果上传过程中发生IO错误或与MinIO通信失败。
+     */
+    public void uploadChunk(MultipartFile file, String batchId, Integer chunkNumber) throws Exception {
+        String objectName = batchId + "/" + chunkNumber;
+        try (InputStream inputStream = file.getInputStream()) {
+            internalMinioClient.putObject(
+                    PutObjectArgs.builder()
+                            .bucket(bucketConfig.getPrivateFiles())
+                            .object(objectName)
+                            .stream(inputStream, file.getSize(), -1)
+                            .build()
+            );
         }
     }
 
@@ -264,6 +273,10 @@ public class PrivateFileService {
      * @throws MinioException 如果删除操作失败。
      */
     public void deletePrivateFile(String objectName) throws Exception {
+        //从当中解析出hash
+        String hash = extractHash(objectName);
+        fileMetadataService.remove(new LambdaQueryWrapper<FileMetadata>().eq(FileMetadata::getContentHash, hash).eq(FileMetadata::getStorageType, "PRIVATE"));
+
         internalMinioClient.removeObject(
                 RemoveObjectArgs.builder().bucket(bucketConfig.getPrivateFiles()).object(objectName).build());
     }
@@ -298,5 +311,15 @@ public class PrivateFileService {
         } catch (Exception e) {
             log.error("删除临时分片失败, batchId: {}", batchId, e);
         }
+    }
+
+
+    public String extractHash(String path) {
+        String[] parts = path.split("/");
+        if (parts.length < 2) {
+            return null; // 或抛异常，路径格式不对
+        }
+        // 倒数第二段是哈希
+        return parts[parts.length - 2];
     }
 } 
