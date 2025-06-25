@@ -39,7 +39,10 @@
           <el-image :src="file.url" fit="contain" lazy class="gallery-image"/>
           <div class="image-info">
             <span class="image-name" :title="file.name">{{ file.name }}</span>
-            <el-button size="small" type="danger" @click="handleDelete(file)">删除</el-button>
+            <div class="actions">
+              <el-button size="small" type="success" @click="handleCopyPublicLink(file)">复制链接</el-button>
+              <el-button size="small" type="danger" @click="handleDelete(file)">删除</el-button>
+            </div>
           </div>
         </div>
       </div>
@@ -93,6 +96,17 @@ const beforeImageUpload = (file) => {
     ElMessage.error('只能上传图片格式!');
   }
   return isImage;
+};
+
+const handleCopyPublicLink = async (file) => {
+  try {
+    // 公开资源的URL已经直接可用，无需再向后端请求
+    await navigator.clipboard.writeText(file.url);
+    ElMessage.success('公开链接已复制到剪贴板！');
+  } catch (error) {
+    ElMessage.error('复制链接失败！');
+    console.error('复制公开链接时出错:', error);
+  }
 };
 
 const handleDelete = async (file) => {
@@ -166,6 +180,10 @@ onMounted(() => {
   text-overflow: ellipsis;
   flex-grow: 1;
   margin-right: 10px;
+}
+.actions {
+  display: flex;
+  flex-shrink: 0;
 }
 .loading-container, .empty-container {
     text-align: center;
