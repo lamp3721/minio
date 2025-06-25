@@ -49,13 +49,13 @@ public class PublicAssetController {
     /**
      * POST /check : 检查文件是否已存在（用于秒传）。
      *
-     * @param checkRequest 包含文件哈希 (fileHash) 的请求体。
+     * @param checkRequest 包含文件哈希 (fileHash) 和原始文件名 (fileName) 的请求体。
      * @return {@link ResponseEntity} 返回一个Map，包含一个布尔值 "exists"。
      */
     @PostMapping("/check")
     public ResponseEntity<Map<String, Boolean>> checkFileExists(@RequestBody CheckRequestDto checkRequest) {
         try {
-            boolean exists = publicAssetService.checkFileExists(checkRequest.getFileHash());
+            boolean exists = publicAssetService.checkFileExists(checkRequest.getFileHash(), checkRequest.getFileName());
             return ResponseEntity.ok(Collections.singletonMap("exists", exists));
         } catch (Exception e) {
             log.error("检查公共文件失败: {}", e.getMessage(), e);

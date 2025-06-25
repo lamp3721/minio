@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,21 +47,31 @@ public class PublicAssetService {
 
     /**
      * 检查文件是否存在。
+     * <p>
+     * 新的逻辑会根据当前日期、文件哈希和原始文件名构造完整的对象路径进行检查。
+     * 这意味着"秒传"仅对当天上传的、哈希和文件名都相同的文件有效。
      *
      * @param fileHash 文件的哈希值。
+     * @param fileName 文件的原始名称。
      * @return 如果文件存在，则返回true；否则返回false。
      */
-    public boolean checkFileExists(String fileHash) {
-        log.info("【秒传检查 - 公共库】开始检查文件是否存在，哈希: {}", fileHash);
+    public boolean checkFileExists(String fileHash, String fileName) {
+        LocalDate now = LocalDate.now();
+        String year = String.valueOf(now.getYear());
+        String month = String.format("%02d", now.getMonthValue());
+        String day = String.format("%02d", now.getDayOfMonth());
+        String objectName = String.join("/", year, month, day, fileHash, fileName);
+
+        log.info("【秒传检查 - 公共库】开始检查文件是否存在，对象路径: {}", objectName);
         try {
             minioClient.statObject(StatObjectArgs.builder()
                     .bucket(bucketConfig.getPublicAssets())
-                    .object(fileHash)
+                    .object(objectName)
                     .build());
-            log.info("【秒传检查 - 公共库】文件已存在 (哈希: {})。将触发秒传。", fileHash);
+            log.info("【秒传检查 - 公共库】文件已存在 (对象路径: {})。将触发秒传。", objectName);
             return true;
         } catch (Exception e) {
-            log.info("【秒传检查 - 公共库】文件不存在 (哈希: {})。将执行新上传。", fileHash);
+            log.info("【秒传检查 - 公共库】文件不存在 (对象路径: {})。将执行新上传。", objectName);
             return false;
         }
     }
@@ -82,20 +93,15 @@ public class PublicAssetService {
                 .map(itemResult -> {
                     try {
                         Item item = itemResult.get();
-                        StatObjectResponse stat = minioClient.statObject(StatObjectArgs.builder()
-                                .bucket(bucketConfig.getPublicAssets())
-                                .object(item.objectName())
-                                .build());
-
-                        String originalName = stat.userMetadata().getOrDefault(
-                                ORIGINAL_FILENAME_META_KEY.substring("X-Amz-Meta-".length()).toLowerCase(),
-                                item.objectName()
-                        );
+                        String objectName = item.objectName();
+                        
+                        // 从对象路径中提取原始文件名
+                        String originalName = objectName.substring(objectName.lastIndexOf('/') + 1);
 
                         Map<String, Object> fileInfo = new HashMap<>();
-                        fileInfo.put("name", originalName);
-                        fileInfo.put("hashName", item.objectName());
-                        fileInfo.put("url", baseUrl + item.objectName());
+                        fileInfo.put("name", originalName); // name现在是解析出来的原始文件名
+                        fileInfo.put("hashName", objectName); // hashName现在是完整的对象路径
+                        fileInfo.put("url", baseUrl + objectName);
 
                         return fileInfo;
                     } catch (Exception e) {
@@ -110,7 +116,7 @@ public class PublicAssetService {
     /**
      * 上传一个公开的图片文件，并返回其永久公开URL。
      * <p>
-     * 文件名将由UUID和原始文件名拼接而成，以避免命名冲突。
+     * 文件将存储在基于日期的路径下：/年/月/日/文件哈希/原始文件名
      *
      * @param file 需要上传的图片文件 ({@link MultipartFile})。
      * @param fileHash 文件的哈希值。
@@ -118,20 +124,27 @@ public class PublicAssetService {
      * @throws Exception 如果与MinIO服务器通信时发生错误或文件上传失败。
      */
     public String uploadPublicImage(MultipartFile file, String fileHash) throws Exception {
+        LocalDate now = LocalDate.now();
+        String year = String.valueOf(now.getYear());
+        String month = String.format("%02d", now.getMonthValue());
+        String day = String.format("%02d", now.getDayOfMonth());
+        String originalFileName = file.getOriginalFilename();
+
+        String objectName = String.join("/", year, month, day, fileHash, originalFileName);
+
         try (InputStream inputStream = file.getInputStream()) {
             minioClient.putObject(
                     PutObjectArgs.builder()
                             .bucket(bucketConfig.getPublicAssets())
-                            .object(fileHash)
+                            .object(objectName)
                             .stream(inputStream, file.getSize(), -1)
                             .contentType(file.getContentType())
-                            .headers(Map.of(ORIGINAL_FILENAME_META_KEY, file.getOriginalFilename()))
                             .build()
             );
-            log.info("【文件上传 - 公共库】文件上传成功。对象名 (哈希): '{}'，原始文件名: '{}'。", fileHash, file.getOriginalFilename());
+            log.info("【文件上传 - 公共库】文件上传成功。对象路径: '{}'。", objectName);
         }
 
-        return minioConfig.getEndpoint() + "/" + bucketConfig.getPublicAssets() + "/" + fileHash;
+        return minioConfig.getEndpoint() + "/" + bucketConfig.getPublicAssets() + "/" + objectName;
     }
 
     /**
