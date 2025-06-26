@@ -2,6 +2,8 @@ package org.example.miniodemo.controller;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.miniodemo.common.response.R;
+import org.example.miniodemo.common.response.ResultCode;
 import org.example.miniodemo.domain.FileMetadata;
 import org.example.miniodemo.dto.CheckRequestDto;
 import org.example.miniodemo.dto.FileDetailDto;
@@ -39,12 +41,12 @@ public class PublicAssetController {
      *         如果发生内部错误，则返回一个空列表和HTTP状态码500 (Internal Server Error)。
      */
     @GetMapping("/list")
-    public ResponseEntity<List<FileDetailDto>> listPublicFiles() {
+    public R<List<FileDetailDto>> listPublicFiles() {
         try {
-            return ResponseEntity.ok(publicAssetService.listPublicFiles());
+            return R.success(publicAssetService.listPublicFiles());
         } catch (Exception e) {
             log.error("获取公共文件列表失败", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Collections.emptyList());
+            return R.error(ResultCode.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -55,19 +57,19 @@ public class PublicAssetController {
      * @return {@link ResponseEntity} 返回一个包含布尔值的DTO "exists"。
      */
     @PostMapping("/check")
-    public ResponseEntity<FileExistsDto> checkFileExists(@RequestBody CheckRequestDto checkRequest) {
+    public R<FileExistsDto> checkFileExists(@RequestBody CheckRequestDto checkRequest) {
         try {
             FileMetadata metadata = publicAssetService.checkAndGetFileMetadata(checkRequest.getFileHash());
             if (metadata != null) {
                 String url = publicAssetService.getPublicUrlFor(metadata.getObjectName());
-                return ResponseEntity.ok(new FileExistsDto(true, url));
+                return R.success(new FileExistsDto(true, url));
             } else {
-                return ResponseEntity.ok(new FileExistsDto(false));
+                return R.success(new FileExistsDto(false));
             }
         } catch (Exception e) {
             log.error("检查公共文件失败: {}", e.getMessage(), e);
             // 出现异常时，为安全起见，返回false，让前端继续走上传流程
-            return ResponseEntity.ok(new FileExistsDto(false));
+            return R.success(new FileExistsDto(false));
         }
     }
 
@@ -81,16 +83,16 @@ public class PublicAssetController {
      *         失败时返回错误信息和HTTP状态码500 (Internal Server Error)。
      */
     @PostMapping("/upload")
-    public ResponseEntity<String> uploadPublicImage(
+    public R<String> uploadPublicImage(
             @RequestParam("file") MultipartFile file,
             @RequestParam("fileHash") String fileHash
     ) {
         try {
             String url = publicAssetService.uploadPublicImage(file, fileHash);
-            return ResponseEntity.ok(url);
+            return R.success(url);
         } catch (Exception e) {
             log.error("上传公共图片失败", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("上传失败");
+            return R.error(ResultCode.FILE_UPLOAD_FAILED, "上传失败");
         }
     }
 
@@ -103,13 +105,13 @@ public class PublicAssetController {
      *         失败时返回错误信息和HTTP状态码500 (Internal Server Error)。
      */
     @DeleteMapping("/delete")
-    public ResponseEntity<String> deletePublicFile(@RequestParam("fileName") String fileName) {
+    public R<String> deletePublicFile(@RequestParam("fileName") String fileName) {
         try {
             publicAssetService.deletePublicFile(fileName);
-            return ResponseEntity.ok("文件删除成功: " + fileName);
+            return R.success("文件删除成功: " + fileName);
         } catch (Exception e) {
             log.error("删除公共文件失败: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("删除失败: " + e.getMessage());
+            return R.error(ResultCode.FILE_DELETE_FAILED, "删除失败: " + e.getMessage());
         }
     }
 } 

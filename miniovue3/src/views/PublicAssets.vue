@@ -61,15 +61,11 @@ import { ref, onMounted } from 'vue';
 import axios from 'axios';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import SparkMD5 from 'spark-md5';
-import { API_BASE_URL } from '../api'; // 从全局配置文件导入
+import apiClient from '../api'; // 导入共享的 apiClient 实例
 
 const loading = ref(false);
 const publicFiles = ref([]);
 const uploadStatus = ref('');
-
-const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-});
 
 const formatFileSize = (size) => {
   if (!size) return '0 B';
@@ -94,8 +90,8 @@ const fetchPublicFiles = async () => {
   loading.value = true;
   try {
     // 注意：这里我们假设后端有一个/public/list接口
-    const response = await apiClient.get('/public/list');
-    publicFiles.value = response.data;
+    // 经过拦截器处理，这里直接得到 res.data
+    publicFiles.value = await apiClient.get('/public/list');
   } catch (error) {
     ElMessage.error('获取公开资源列表失败！');
     console.error(error);
@@ -123,9 +119,10 @@ const handlePublicUpload = async (options) => {
 
   try {
     console.log(`【公共资源】向后端发送检查请求，哈希: ${fileHash}`);
-    const checkResponse = await apiClient.post('/public/check', { fileHash, fileName: file.name });
-    console.log(`【公共资源】收到后端检查响应:`, checkResponse.data);
-    if (checkResponse.data.exists) {
+    // 经过拦截器处理，这里直接得到 res.data
+    const checkResult = await apiClient.post('/public/check', { fileHash, fileName: file.name });
+    console.log(`【公共资源】收到后端检查响应:`, checkResult);
+    if (checkResult.exists) {
       ElMessage.success('文件已存在，秒传成功！');
       uploadStatus.value = '秒传成功！';
       console.log('【公共资源】后端确认文件已存在，触发秒传。');
@@ -146,6 +143,7 @@ const handlePublicUpload = async (options) => {
 
   try {
     uploadStatus.value = '正在上传...';
+    // 经过拦截器处理，这里直接得到 res.data (如果成功的话)
     await apiClient.post('/public/upload', formData);
     ElMessage.success('图片上传成功！');
     uploadStatus.value = '上传成功！';
@@ -188,6 +186,7 @@ const handleDelete = async (file) => {
     });
 
     // 使用 file.path 删除，因为DTO中不包含hashName，path即是MinIO中的完整对象名
+    // 经过拦截器处理，这里不需要关心返回值
     await apiClient.delete('/public/delete', { params: { fileName: file.path } });
 
     ElMessage.success('文件删除成功！');

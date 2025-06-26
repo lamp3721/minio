@@ -63,7 +63,7 @@ import axios from 'axios';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { v4 as uuidv4 } from 'uuid';
 import SparkMD5 from 'spark-md5';
-import { API_BASE_URL } from '../api';
+import apiClient from '../api';
 
 // --- Refs and Reactive State ---
 const uploadRef = ref(null);
@@ -77,9 +77,6 @@ const uploadTimer = ref(null);
 
 // --- Constants ---
 const CHUNK_SIZE = 5 * 1024 * 1024;
-
-// --- API Client ---
-const apiClient = axios.create({ baseURL: API_BASE_URL });
 
 // --- File Hash Calculation ---
 const calculateFileHash = (file) => {
@@ -118,10 +115,9 @@ const calculateFileHash = (file) => {
 const fetchFileList = async () => {
   loading.value = true;
   try {
-    const response = await apiClient.get('/private/list');
-    fileList.value = response.data;
+    fileList.value = await apiClient.get('/private/list');
   } catch (error) {
-    ElMessage.error('获取文件列表失败！');
+    // 拦截器中已处理 ElMessage
     console.error(error);
   } finally {
     loading.value = false;
@@ -130,41 +126,46 @@ const fetchFileList = async () => {
 
 const handleDownload = async (row) => {
   try {
-    const response = await apiClient.get('/private/download-url', { params: { fileName: row.path } });
+    const url = await apiClient.get('/private/download-url', { params: { fileName: row.path } });
     const link = document.createElement('a');
-    link.href = response.data;
+    link.href = url;
     link.setAttribute('download', row.name);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     ElMessage.success('开始下载...');
   } catch (error) {
-    ElMessage.error('获取下载链接失败！');
+     // 拦截器中已处理 ElMessage
+    console.error(error);
   }
 };
 
 const handleCopyLink = async (row) => {
   try {
-    const response = await apiClient.get('/private/download-url', { params: { fileName: row.path } });
-    await navigator.clipboard.writeText(response.data);
+    const url = await apiClient.get('/private/download-url', { params: { fileName: row.path } });
+    await navigator.clipboard.writeText(url);
     ElMessage.success('下载链接已复制到剪贴板！');
   } catch (error) {
-    ElMessage.error('复制链接失败！');
+     // 拦截器中已处理 ElMessage
+    console.error(error);
   }
 };
 
 const handleDelete = async (row) => {
-  await ElMessageBox.confirm(`确定要删除文件 "${row.name}" 吗？`, '警告', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning',
-  });
   try {
-    await apiClient.delete('/private/delete', { params: { fileName: row.path } });
-    ElMessage.success('文件删除成功！');
-    fetchFileList();
+      await ElMessageBox.confirm(`确定要删除文件 "${row.name}" 吗？`, '警告', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+      });
+      await apiClient.delete('/private/delete', { params: { fileName: row.path } });
+      ElMessage.success('文件删除成功！');
+      fetchFileList();
   } catch (error) {
-    ElMessage.error('文件删除失败！');
+     if (error.message && !error.message.includes('cancel')) {
+       // 拦截器中已处理 ElMessage
+       console.error(error);
+    }
   }
 };
 
@@ -194,9 +195,9 @@ const handleUpload = async (options) => {
   // 检查文件是否已存在 (秒传)
   try {
     console.log(`【私有文件】向后端发送检查请求，哈希: ${fileHash}`);
-    const checkResponse = await apiClient.post('/private/check', { fileHash: fileHash, fileName: file.name });
-    console.log(`【私有文件】收到后端检查响应:`, checkResponse.data);
-    if (checkResponse.data.exists) {
+    const checkResult = await apiClient.post('/private/check', { fileHash: fileHash, fileName: file.name });
+    console.log(`【私有文件】收到后端检查响应:`, checkResult);
+    if (checkResult.exists) {
         ElMessage.success('文件已存在，秒传成功！');
         uploadProgress.value = { percentage: 100, status: '秒传成功！' };
         console.log('【私有文件】后端确认文件已存在，触发秒传。');
@@ -211,7 +212,8 @@ const handleUpload = async (options) => {
         return;
     }
   } catch(e) {
-    ElMessage.error('检查文件失败，请稍后重试');
+    // 拦截器已处理
+    console.error(e);
     isUploading.value = false;
     return;
   }

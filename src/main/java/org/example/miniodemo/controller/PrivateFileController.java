@@ -2,6 +2,8 @@ package org.example.miniodemo.controller;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.miniodemo.common.response.R;
+import org.example.miniodemo.common.response.ResultCode;
 import org.example.miniodemo.domain.FileMetadata;
 import org.example.miniodemo.dto.CheckRequestDto;
 import org.example.miniodemo.dto.FileDetailDto;
@@ -48,13 +50,13 @@ public class PrivateFileController {
      * 成功时返回列表和HTTP 200，失败时返回错误信息和HTTP 500。
      */
     @GetMapping("/list")
-    public ResponseEntity<List<FileDetailDto>> listPrivateFiles() {
+    public R<List<FileDetailDto>> listPrivateFiles() {
         try {
             List<FileDetailDto> fileList = privateFileService.listPrivateFiles();
-            return ResponseEntity.ok(fileList);
+            return R.success(fileList);
         } catch (Exception e) {
             log.error("获取文件列表失败: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Collections.emptyList());
+            return R.error(ResultCode.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -69,21 +71,21 @@ public class PrivateFileController {
      * @return {@link ResponseEntity} 包含操作结果字符串的响应实体。
      */
     @PostMapping("/upload/chunk")
-    public ResponseEntity<String> uploadPrivateChunk(
+    public R<String> uploadPrivateChunk(
             @RequestParam("file") MultipartFile file,
             @RequestParam("batchId") String batchId,
             @RequestParam("chunkNumber") Integer chunkNumber) {
 
         if (file.isEmpty() || batchId.isBlank()) {
-            return ResponseEntity.badRequest().body("文件、批次ID或分片序号不能为空");
+            return R.error(ResultCode.BAD_REQUEST, "文件、批次ID或分片序号不能为空");
         }
 
         try {
             privateFileService.uploadChunk(file, batchId, chunkNumber);
-            return ResponseEntity.ok("分片 " + chunkNumber + " 上传成功");
+            return R.success("分片 " + chunkNumber + " 上传成功");
         } catch (Exception e) {
             log.error("分片上传失败: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("分片上传失败: " + e.getMessage());
+            return R.error(ResultCode.FILE_UPLOAD_FAILED, "分片上传失败: " + e.getMessage());
         }
     }
 
@@ -96,14 +98,14 @@ public class PrivateFileController {
      * @return {@link ResponseEntity} 返回一个包含布尔值的DTO。
      */
     @PostMapping("/check")
-    public ResponseEntity<FileExistsDto> checkFileExists(@RequestBody CheckRequestDto checkRequest) {
+    public R<FileExistsDto> checkFileExists(@RequestBody CheckRequestDto checkRequest) {
         try {
             boolean exists = privateFileService.checkFileExists(checkRequest.getFileHash(), "PRIVATE");
-            return ResponseEntity.ok(new FileExistsDto(exists));
+            return R.success(new FileExistsDto(exists));
         } catch (Exception e) {
             log.error("检查文件失败: {}", e.getMessage(), e);
             // 出现异常时，为安全起见，返回false，让前端继续走上传流程
-            return ResponseEntity.ok(new FileExistsDto(false));
+            return R.success(new FileExistsDto(false));
         }
     }
 
@@ -117,7 +119,7 @@ public class PrivateFileController {
      * @return {@link ResponseEntity} 包含操作结果字符串的响应实体。
      */
     @PostMapping("/upload/merge")
-    public ResponseEntity<String> mergePrivateChunks(@RequestBody MergeRequestDto mergeRequest) {
+    public R<String> mergePrivateChunks(@RequestBody MergeRequestDto mergeRequest) {
         try {
             privateFileService.mergeChunks(
                     mergeRequest.getBatchId(),
@@ -128,10 +130,10 @@ public class PrivateFileController {
                     mergeRequest.getFileSize()
             );
 
-            return ResponseEntity.ok("文件合并成功: " + mergeRequest.getFileName());
+            return R.success("文件合并成功: " + mergeRequest.getFileName());
         } catch (Exception e) {
             log.error("文件合并失败: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("文件合并失败: " + e.getMessage());
+            return R.error(ResultCode.MERGE_FAILED, "文件合并失败: " + e.getMessage());
         }
     }
 
@@ -145,13 +147,13 @@ public class PrivateFileController {
      * @return {@link ResponseEntity} 包含预签名URL字符串的响应实体。
      */
     @GetMapping("/download-url")
-    public ResponseEntity<String> getPrivatePresignedDownloadUrl(@RequestParam("fileName") String fileName) {
+    public R<String> getPrivatePresignedDownloadUrl(@RequestParam("fileName") String fileName) {
         try {
             String url = privateFileService.getPresignedPrivateDownloadUrl(fileName);
-            return ResponseEntity.ok(url);
+            return R.success(url);
         } catch (Exception e) {
             log.error("获取预签名 URL 失败: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("获取 URL 失败: " + e.getMessage());
+            return R.error(ResultCode.FILE_DOWNLOAD_FAILED, "获取 URL 失败: " + e.getMessage());
         }
     }
 
@@ -192,13 +194,13 @@ public class PrivateFileController {
      * @return {@link ResponseEntity} 包含操作结果字符串的响应实体。
      */
     @DeleteMapping("/delete")
-    public ResponseEntity<String> deletePrivateFile(@RequestParam("fileName") String fileName) {
+    public R<String> deletePrivateFile(@RequestParam("fileName") String fileName) {
         try {
             privateFileService.deletePrivateFile(fileName);
-            return ResponseEntity.ok("文件删除成功: " + fileName);
+            return R.success("文件删除成功: " + fileName);
         } catch (Exception e) {
             log.error("文件删除失败: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("删除失败: " + e.getMessage());
+            return R.error(ResultCode.FILE_DELETE_FAILED, "文件删除失败: " + e.getMessage());
         }
     }
 } 
