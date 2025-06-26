@@ -46,18 +46,36 @@ public abstract class AbstractChunkedFileService {
      */
     protected abstract StorageType getStorageType();
 
-    /**
-     * 合并成功后，执行特定的异步清理任务。
-     */
-    protected abstract void triggerAsyncChunkCleanup(String batchId, List<String> objectNames);
 
 
     // --- 通用公共方法 ---
 
+    /**
+     * 合并成功后，执行特定的异步清理任务。
+     * @param batchId 合并批次ID
+     * @param objectNames 要删除的分片对象路径列表。
+     * @param bucketName 存储桶名称
+     */
+    protected void triggerAsyncChunkCleanup(String batchId, List<String> objectNames,String bucketName){
+        asyncFileService.deleteTemporaryChunks(batchId, objectNames,bucketName);
+    }
+
+    /**
+     * 检查文件是否存在
+     * @param fileHash 文件哈希值
+     * @return 文件元数据
+     */
     public Optional<FileMetadata> checkFileExists(String fileHash) {
         return fileMetadataRepository.findByHash(fileHash, getStorageType());
     }
 
+    /**
+     * 上传一个分片
+     * @param file  文件
+     * @param batchId 批次ID
+     * @param chunkNumber 分片序号
+     * @throws Exception 如果上传分片时发生错误。
+     */
     public void uploadChunk(MultipartFile file, String batchId, Integer chunkNumber) throws Exception {
         String objectName = batchId + "/" + chunkNumber;
         try (InputStream inputStream = file.getInputStream()) {
@@ -70,7 +88,13 @@ public abstract class AbstractChunkedFileService {
             );
         }
     }
-    
+
+    /**
+     * 获取已上传的分片列表。
+     * @param batchId 分片上传批次ID。
+     * @return 已上传的分片列表。
+     * @throws Exception 如果查询时出错。
+     */
     public List<Integer> getUploadedChunkNumbers(String batchId) throws Exception {
         List<StorageObject> chunks = objectStorageService.listObjects(
                 getBucketName(),
@@ -89,6 +113,16 @@ public abstract class AbstractChunkedFileService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 合并分片文件。
+     * @param batchId 分片上传批次ID
+     * @param originalFileName 原始文件名
+     * @param fileHash 文件哈希值
+     * @param contentType 文件内容类型
+     * @param fileSize 文件大小
+     * @return 合并后的文件元数据
+     * @throws Exception 如果列出、合并或删除分片时发生错误，或分片数量超过MinIO的合并限制。
+     */
     @Transactional
     public FileMetadata mergeChunks(String batchId, String originalFileName, String fileHash, String contentType, Long fileSize) throws Exception {
         // 1. 列出并排序所有分片
@@ -120,7 +154,7 @@ public abstract class AbstractChunkedFileService {
 
         // 4. 异步删除临时分片
         log.info("【文件合并 - {}】文件合并成功，将异步清理临时分片。最终对象路径: '{}'。", getStorageType(), finalObjectName);
-        triggerAsyncChunkCleanup(batchId, sourceObjectNames);
+        triggerAsyncChunkCleanup(batchId, sourceObjectNames, getBucketName());
 
         return metadata;
     }
@@ -128,6 +162,12 @@ public abstract class AbstractChunkedFileService {
 
     // --- 私有辅助方法 ---
 
+    /**
+     * 获取分片存储桶名称。
+     * @param batchId 分片上传批次ID
+     * @return 分片存储桶名称
+     * @throws Exception 如果获取分片存储桶名称时发生错误。
+     */
     private List<String> listAndSortChunks(String batchId) throws Exception {
         List<StorageObject> chunks = objectStorageService.listObjects(getBucketName(), batchId + "/", true);
         if (chunks.isEmpty()) {
@@ -138,7 +178,16 @@ public abstract class AbstractChunkedFileService {
                 .sorted(Comparator.comparing(s -> Integer.valueOf(s.substring(s.lastIndexOf('/') + 1))))
                 .collect(Collectors.toList());
     }
-    
+
+    /**
+     * 构建文件元数据
+     * @param objectName 对象名
+     * @param originalFileName 原始文件名
+     * @param fileSize 文件大小
+     * @param contentType 文件类型
+     * @param fileHash 文件哈希值
+     * @return 文件元数据
+     */
     private FileMetadata buildFileMetadata(String objectName, String originalFileName, Long fileSize, String contentType, String fileHash) {
         FileMetadata metadata = new FileMetadata();
         metadata.setObjectName(objectName);

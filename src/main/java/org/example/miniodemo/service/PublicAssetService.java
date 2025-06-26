@@ -71,11 +71,6 @@ public class PublicAssetService extends AbstractChunkedFileService {
     protected StorageType getStorageType() {
         return StorageType.PUBLIC;
     }
-
-    @Override
-    protected void triggerAsyncChunkCleanup(String batchId, List<String> objectNames) {
-        asyncFileService.deleteTemporaryPublicChunks(batchId, objectNames);
-    }
     
     /**
      * 为给定的对象名生成公开访问URL。

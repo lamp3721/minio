@@ -50,35 +50,21 @@ public class AsyncFileService {
         });
     }
 
+
     /**
      * 异步删除公共存储桶中的临时分片文件。
-     *
-     * @param batchId     批次ID，主要用于日志记录。
+     * @param batchId 批次ID，主要用于日志记录。
      * @param objectNames 要删除的分片对象路径列表。
+     * @param bucketName 存储桶名称。
      */
     @Async
-    public void deleteTemporaryPublicChunks(String batchId, List<String> objectNames) {
+    public void deleteTemporaryChunks(String batchId, List<String> objectNames, String bucketName) {
         try {
-            objectStorageService.delete(bucketConfig.getPublicAssets(), objectNames);
-            log.info("[异步任务] 成功删除公共库批次 '{}' 的 {} 个临时分片。", batchId, objectNames.size());
+            objectStorageService.delete(bucketName, objectNames);
+            log.info("[异步任务] 成功删除{}库批次 '{}' 的 {} 个临时分片。", bucketName,batchId, objectNames.size());
         } catch (Exception e) {
-            log.error("[异步任务] 删除公共库批次 '{}' 的临时分片失败。", batchId, e);
+            log.error("[异步任务] 删除{}库批次 '{}' 的临时分片失败。", bucketName,batchId, e);
         }
     }
 
-    /**
-     * 异步删除私有存储桶中的临时分片文件。
-     *
-     * @param batchId     批次ID，主要用于日志记录。
-     * @param objectNames 要删除的分片对象路径列表。
-     */
-    @Async
-    public void deleteTemporaryPrivateChunks(String batchId, List<String> objectNames) {
-        try {
-            objectStorageService.delete(bucketConfig.getPrivateFiles(), objectNames);
-            log.info("[异步任务] 成功删除私有库批次 '{}' 的 {} 个临时分片。", batchId, objectNames.size());
-        } catch (Exception e) {
-            log.error("[异步任务] 删除私有库批次 '{}' 的临时分片失败。", batchId, e);
-        }
-    }
 } 

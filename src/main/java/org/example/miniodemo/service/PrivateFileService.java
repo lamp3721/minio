@@ -60,11 +60,6 @@ public class PrivateFileService extends AbstractChunkedFileService {
     protected StorageType getStorageType() {
         return StorageType.PRIVATE;
     }
-
-    @Override
-    protected void triggerAsyncChunkCleanup(String batchId, List<String> objectNames) {
-        asyncFileService.deleteTemporaryPrivateChunks(batchId, objectNames);
-    }
     
     /**
      * 列出私有存储桶中所有最终合并完成的文件。
