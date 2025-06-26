@@ -10,6 +10,12 @@ minio:
     private-files: "private-files"
     public-assets: "public-assets"
 
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+#    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl  # 或 slf4j
+  mapper-locations: classpath:mapper/*.xml  # 若使用 XML Mapper
+
 # CORS跨域配置
 cors:
   allowed-origins: "*"

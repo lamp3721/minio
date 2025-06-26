@@ -20,8 +20,3 @@ spring:
     username: root
     password: 2932349894
     driver-class-name: com.mysql.cj.jdbc.Driver
-mybatis-plus:
-  configuration:
-    map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl  # 或 slf4j
-  mapper-locations: classpath:mapper/*.xml  # 若使用 XML Mapper

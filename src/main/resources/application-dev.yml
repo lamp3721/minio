@@ -10,12 +10,3 @@ spring:
     username: root
     password: 123456
     driver-class-name: com.mysql.cj.jdbc.Driver
-mybatis-plus:
-  configuration:
-    map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl  # 或 slf4j
-  mapper-locations: classpath:mapper/*.xml  # 若使用 XML Mapper
-
-# CORS跨域配置 (开发环境)
-cors:
-  allowed-origins: http://localhost:5173,http://127.0.0.1:5173
