@@ -26,6 +26,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.example.miniodemo.common.util.FilePathUtil;
+import org.example.miniodemo.service.AsyncFileService;
 
 import java.io.InputStream;
 import java.time.LocalDate;
@@ -52,16 +53,19 @@ public class PublicAssetService {
     private final MinioBucketConfig bucketConfig;
     private final MinioConfig minioConfig;
     private final FileMetadataRepository fileMetadataRepository;
+    private final AsyncFileService asyncFileService;
 
     public PublicAssetService(
             ObjectStorageService objectStorageService,
             MinioBucketConfig bucketConfig,
             MinioConfig minioConfig,
-            FileMetadataRepository fileMetadataRepository) {
+            FileMetadataRepository fileMetadataRepository,
+            AsyncFileService asyncFileService) {
         this.objectStorageService = objectStorageService;
         this.bucketConfig = bucketConfig;
         this.minioConfig = minioConfig;
         this.fileMetadataRepository = fileMetadataRepository;
+        this.asyncFileService = asyncFileService;
     }
 
     /**
@@ -313,24 +317,9 @@ public class PublicAssetService {
         }
 
         // 4. 合并成功后，删除临时分片
-        log.info("【文件合并 - 公共库】文件合并成功，将清理临时分片。最终对象路径: '{}'。", finalObjectName);
-        deleteTemporaryChunks(batchId, sourceObjectNames);
+        log.info("【文件合并 - 公共库】文件合并成功，将异步清理临时分片。最终对象路径: '{}'。", finalObjectName);
+        asyncFileService.deleteTemporaryPublicChunks(batchId, sourceObjectNames);
 
         return getPublicUrlFor(finalObjectName);
-    }
-
-    /**
-     * 合并成功后，删除指定批次的所有临时分片文件。
-     *
-     * @param batchId     批次ID。
-     * @param objectNames 要删除的分片对象路径列表。
-     */
-    private void deleteTemporaryChunks(String batchId, List<String> objectNames) {
-        try {
-            objectStorageService.delete(bucketConfig.getPublicAssets(), objectNames);
-            log.info("成功删除公共库批次 '{}' 的 {} 个临时分片。", batchId, objectNames.size());
-        } catch (Exception e) {
-            log.error("删除公共库批次 '{}' 的临时分片失败。", batchId, e);
-        }
     }
 }

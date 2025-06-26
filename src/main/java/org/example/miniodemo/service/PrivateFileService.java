@@ -200,8 +200,8 @@ public class PrivateFileService {
 
 
         // 5. 合并成功后，删除临时分片
-        log.info("【文件合并 - 私有库】文件合并成功，将清理临时分片。最终对象路径: '{}'。", finalObjectName);
-        deleteTemporaryChunks(batchId, sourceObjectNames);
+        log.info("【文件合并 - 私有库】文件合并成功，将异步清理临时分片。最终对象路径: '{}'。", finalObjectName);
+        asyncFileService.deleteTemporaryPrivateChunks(batchId, sourceObjectNames);
     }
 
     /**
@@ -273,21 +273,6 @@ public class PrivateFileService {
         String hash = FilePathUtil.extractHashFromPath(objectName);
         if (hash != null) {
             fileMetadataRepository.deleteByHash(hash, StorageType.PRIVATE);
-        }
-    }
-
-    /**
-     * 合并成功后，删除指定批次的所有临时分片文件。
-     *
-     * @param batchId     批次ID。
-     * @param objectNames 要删除的分片对象路径列表。
-     */
-    private void deleteTemporaryChunks(String batchId, List<String> objectNames) {
-        try {
-            objectStorageService.delete(bucketConfig.getPrivateFiles(), objectNames);
-            log.info("成功删除批次 '{}' 的 {} 个临时分片。", batchId, objectNames.size());
-        } catch (Exception e) {
-            log.error("删除批次 '{}' 的临时分片失败。", batchId, e);
         }
     }
 } 

@@ -3,10 +3,14 @@ package org.example.miniodemo.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.common.util.FilePathUtil;
+import org.example.miniodemo.config.MinioBucketConfig;
 import org.example.miniodemo.domain.StorageType;
 import org.example.miniodemo.repository.FileMetadataRepository;
+import org.example.miniodemo.service.storage.ObjectStorageService;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 @Slf4j
@@ -14,6 +18,8 @@ import org.springframework.stereotype.Service;
 public class AsyncFileService {
 
     private final FileMetadataRepository fileMetadataRepository;
+    private final ObjectStorageService objectStorageService;
+    private final MinioBucketConfig bucketConfig;
 
     /**
      * 异步更新文件的最后访问时间。
@@ -42,5 +48,37 @@ public class AsyncFileService {
                 log.warn("[异步任务] 更新文件 '{}' 的最后访问时间失败，未找到对应记录或更新失败。", objectName);
             }
         });
+    }
+
+    /**
+     * 异步删除公共存储桶中的临时分片文件。
+     *
+     * @param batchId     批次ID，主要用于日志记录。
+     * @param objectNames 要删除的分片对象路径列表。
+     */
+    @Async
+    public void deleteTemporaryPublicChunks(String batchId, List<String> objectNames) {
+        try {
+            objectStorageService.delete(bucketConfig.getPublicAssets(), objectNames);
+            log.info("[异步任务] 成功删除公共库批次 '{}' 的 {} 个临时分片。", batchId, objectNames.size());
+        } catch (Exception e) {
+            log.error("[异步任务] 删除公共库批次 '{}' 的临时分片失败。", batchId, e);
+        }
+    }
+
+    /**
+     * 异步删除私有存储桶中的临时分片文件。
+     *
+     * @param batchId     批次ID，主要用于日志记录。
+     * @param objectNames 要删除的分片对象路径列表。
+     */
+    @Async
+    public void deleteTemporaryPrivateChunks(String batchId, List<String> objectNames) {
+        try {
+            objectStorageService.delete(bucketConfig.getPrivateFiles(), objectNames);
+            log.info("[异步任务] 成功删除私有库批次 '{}' 的 {} 个临时分片。", batchId, objectNames.size());
+        } catch (Exception e) {
+            log.error("[异步任务] 删除私有库批次 '{}' 的临时分片失败。", batchId, e);
+        }
     }
 } 
