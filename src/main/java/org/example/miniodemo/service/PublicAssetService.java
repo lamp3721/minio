@@ -85,6 +85,35 @@ public class PublicAssetService {
     }
 
     /**
+     * 根据文件哈希检查文件是否存在，如果存在，则返回其元数据。
+     *
+     * @param fileHash 文件的哈希值。
+     * @return 如果文件存在，则返回 {@link FileMetadata} 对象；否则返回 {@code null}。
+     */
+    public FileMetadata checkAndGetFileMetadata(String fileHash) {
+        LambdaQueryWrapper<FileMetadata> queryWrapper = new LambdaQueryWrapper<FileMetadata>()
+                .eq(FileMetadata::getContentHash, fileHash)
+                .eq(FileMetadata::getStorageType, StorageType.PUBLIC);
+        FileMetadata fileMetadata = fileMetadataService.getOne(queryWrapper);
+        if (fileMetadata != null) {
+            log.info("【秒传检查 - 公开库】文件已存在 (hash:{})。元数据已找到。", fileHash);
+            return fileMetadata;
+        }
+        log.info("【秒传检查 - 公开库】文件不存在 (hash:{})。", fileHash);
+        return null;
+    }
+
+    /**
+     * 为给定的对象名生成公开访问URL。
+     *
+     * @param objectName MinIO中的对象名。
+     * @return 完整的公开URL。
+     */
+    public String getPublicUrlFor(String objectName) {
+        return minioConfig.getPublicEndpoint() + "/" + bucketConfig.getPublicAssets() + "/" + objectName;
+    }
+
+    /**
      * 获取公共存储桶中所有文件的列表，并为每个文件生成可直接访问的URL。
      *
      * @return 包含文件信息的DTO列表。

@@ -2,6 +2,7 @@ package org.example.miniodemo.controller;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.miniodemo.domain.FileMetadata;
 import org.example.miniodemo.dto.CheckRequestDto;
 import org.example.miniodemo.dto.FileDetailDto;
 import org.example.miniodemo.dto.FileExistsDto;
@@ -56,9 +57,13 @@ public class PublicAssetController {
     @PostMapping("/check")
     public ResponseEntity<FileExistsDto> checkFileExists(@RequestBody CheckRequestDto checkRequest) {
         try {
-            // 检查文件是否存在判读hash
-            boolean exists = publicAssetService.checkFileExists(checkRequest.getFileHash(),"PUBLIC");
-            return ResponseEntity.ok(new FileExistsDto(exists));
+            FileMetadata metadata = publicAssetService.checkAndGetFileMetadata(checkRequest.getFileHash());
+            if (metadata != null) {
+                String url = publicAssetService.getPublicUrlFor(metadata.getObjectName());
+                return ResponseEntity.ok(new FileExistsDto(true, url));
+            } else {
+                return ResponseEntity.ok(new FileExistsDto(false));
+            }
         } catch (Exception e) {
             log.error("检查公共文件失败: {}", e.getMessage(), e);
             // 出现异常时，为安全起见，返回false，让前端继续走上传流程
