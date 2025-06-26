@@ -2,6 +2,7 @@ package org.example.miniodemo.repository.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.domain.FileMetadata;
 import org.example.miniodemo.domain.StorageType;
 import org.example.miniodemo.mapper.FileMetadataMapper;
@@ -18,6 +19,7 @@ import java.util.Optional;
  */
 @Repository // 使用@Repository注解标记这是一个数据访问组件
 @RequiredArgsConstructor
+@Slf4j
 public class MyBatisFileMetadataRepository implements FileMetadataRepository {
 
     private final FileMetadataMapper fileMetadataMapper;
@@ -49,5 +51,11 @@ public class MyBatisFileMetadataRepository implements FileMetadataRepository {
         LambdaQueryWrapper<FileMetadata> queryWrapper = new LambdaQueryWrapper<FileMetadata>()
                 .eq(FileMetadata::getStorageType, storageType);
         return fileMetadataMapper.selectList(queryWrapper);
+    }
+
+    @Override
+    public Integer update(FileMetadata metadata) {
+        log.info("更新文件元数据：{}", metadata);
+        return fileMetadataMapper.updateById(metadata);
     }
 } 

@@ -46,4 +46,12 @@ public interface FileMetadataRepository {
      * @return 文件元数据列表。
      */
     List<FileMetadata> findAll(StorageType storageType);
-} 
+
+    /**
+     * 更新一个已存在的文件元数据记录。
+     *
+     * @param metadata 包含更新信息的元数据对象。
+     * @return 受影响的行数。
+     */
+    Integer update(FileMetadata metadata);
+}

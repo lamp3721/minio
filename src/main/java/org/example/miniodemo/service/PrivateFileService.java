@@ -229,6 +229,9 @@ public class PrivateFileService {
      * @throws Exception 如果生成URL时出错。
      */
     public String getPresignedPrivateDownloadUrl(String objectName) throws Exception {
+        // 更新最后访问时间
+        updateLastAccessedTime(objectName);
+
         return objectStorageService.getPresignedDownloadUrl(
                 bucketConfig.getPrivateFiles(),
                 objectName,
@@ -245,7 +248,28 @@ public class PrivateFileService {
      * @throws Exception 如果下载时出错。
      */
     public InputStream downloadPrivateFile(String objectName) throws Exception {
+        // 更新最后访问时间
+        updateLastAccessedTime(objectName);
         return objectStorageService.download(bucketConfig.getPrivateFiles(), objectName);
+    }
+
+    /**
+     * 根据对象名称更新文件的最后访问时间。
+     *
+     * @param objectName 文件的对象路径。
+     */
+    private void updateLastAccessedTime(String objectName) {
+        String hash = FilePathUtil.extractHashFromPath(objectName);
+        if (hash == null) {
+            log.warn("无法从对象路径中提取哈希值，无法更新访问时间: {}", objectName);
+            return;
+        }
+
+        fileMetadataRepository.findByHash(hash, StorageType.PRIVATE).ifPresent(metadata -> {
+            metadata.setLastAccessedAt(new java.util.Date());
+            fileMetadataRepository.update(metadata);
+            log.info("文件 '{}' 的最后访问时间已更新。", objectName);
+        });
     }
 
     /**
