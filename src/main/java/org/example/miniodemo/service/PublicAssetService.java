@@ -114,25 +114,20 @@ public class PublicAssetService {
      * @throws Exception 如果与MinIO服务器通信时发生错误。
      */
     public List<FileDetailDto> listPublicFiles() throws Exception {
-        List<StorageObject> storageObjects = objectStorageService.listObjects(bucketConfig.getPublicAssets(), null, true);
+        // 改为从数据库查询，作为文件列表的唯一真实来源
+        List<FileMetadata> metadataList = fileMetadataRepository.findAll(StorageType.PUBLIC);
 
         String baseUrl = minioConfig.getPublicEndpoint() + "/" + bucketConfig.getPublicAssets() + "/";
 
-        return storageObjects.stream()
+        return metadataList.stream()
                 .filter(Objects::nonNull)
-                .filter(item -> item.getObjectName().matches("^\\d{4}/\\d{2}/\\d{2}/.+/.+"))
-                .map(item -> {
-                    String objectName = item.getObjectName();
-                    // 从对象路径中提取原始文件名
-                    String originalName = objectName.substring(objectName.lastIndexOf('/') + 1);
-
-                    return FileDetailDto.builder()
-                            .name(originalName)
-                            .path(objectName)
-                            .size(item.getSize())
-                            .url(baseUrl + objectName)
-                            .build();
-                })
+                .map(metadata -> FileDetailDto.builder()
+                        .name(metadata.getOriginalFilename())
+                        .path(metadata.getObjectName())
+                        .size(metadata.getFileSize())
+                        .url(baseUrl + metadata.getObjectName())
+                        .contentType(metadata.getContentType()) // 附上contentType
+                        .build())
                 .collect(Collectors.toList());
     }
 

@@ -31,4 +31,8 @@ public class FileDetailDto {
      * 文件的公开访问URL（仅对公共资源有效）。
      */
     private String url;
+    /**
+     * 文件的MIME类型。
+     */
+    private String contentType;
 } 

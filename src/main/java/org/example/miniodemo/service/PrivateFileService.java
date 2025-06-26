@@ -107,31 +107,18 @@ public class PrivateFileService {
      * @throws Exception 如果列出文件时发生错误。
      */
     public List<FileDetailDto> listPrivateFiles() throws Exception {
-        try {
-            List<StorageObject> results = objectStorageService.listObjects(
-                    bucketConfig.getPrivateFiles(), null, true);
+        // 改为从数据库查询，作为文件列表的唯一真实来源
+        List<FileMetadata> metadataList = fileMetadataRepository.findAll(StorageType.PRIVATE);
 
-            return results.stream()
-                    .filter(Objects::nonNull)
-                    // 使用正则表达式匹配 YYYY/MM/DD/hash/filename 格式的路径
-                    // 这样可以精确地只包含最终文件，并排除临时分片（如 batchId/0）和虚拟目录
-                    .filter(item -> item.getObjectName().matches("^\\d{4}/\\d{2}/\\d{2}/.+/.+"))
-                    .map(item -> {
-                        String objectName = item.getObjectName();
-                        // 从对象路径中提取原始文件名
-                        String originalName = objectName.substring(objectName.lastIndexOf('/') + 1);
-
-                        return FileDetailDto.builder()
-                                .name(originalName)
-                                .path(objectName)
-                                .size(item.getSize())
-                                .build(); // 私有文件不生成URL
-                    })
-                    .collect(Collectors.toList());
-        } catch (Exception e) {
-            log.error("列出私有文件失败", e);
-            throw new MinioException("无法列出文件");
-        }
+        return metadataList.stream()
+                .filter(Objects::nonNull)
+                .map(metadata -> FileDetailDto.builder()
+                        .name(metadata.getOriginalFilename())
+                        .path(metadata.getObjectName())
+                        .size(metadata.getFileSize())
+                        .contentType(metadata.getContentType())
+                        .build()) // 私有文件不生成URL
+                .collect(Collectors.toList());
     }
 
     /**

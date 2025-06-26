@@ -63,12 +63,12 @@ public class FileMetadata implements Serializable {
     /**
      * 记录创建时间
      */
-    private Date createTime;
+    private Date createdAt;
 
     /**
-     * 记录更新时间
+     * 最后访问时间
      */
-    private Date updateTime;
+    private Date lastAccessedAt;
 
     @TableField(exist = false)
     private static final long serialVersionUID = 1L;

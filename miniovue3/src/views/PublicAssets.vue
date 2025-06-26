@@ -43,6 +43,27 @@
         </div>
       </template>
       <el-table :data="fileList" v-loading="loading" style="width: 100%">
+        <el-table-column label="预览" width="100">
+          <template #default="scope">
+            <el-image
+                v-if="scope.row.contentType && scope.row.contentType.startsWith('image/')"
+                :src="scope.row.url"
+                :preview-src-list="[scope.row.url]"
+                style="width: 60px; height: 60px; border-radius: 4px;"
+                fit="cover"
+                lazy
+            >
+              <template #error>
+                <div class="image-slot-error">
+                  <el-icon><Picture /></el-icon>
+                </div>
+              </template>
+            </el-image>
+            <div v-else class="file-icon-placeholder">
+              <el-icon><Document /></el-icon>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column prop="name" label="文件名" />
         <el-table-column prop="size" label="大小" :formatter="formatFileSize" />
         <el-table-column label="操作" width="200">
@@ -59,6 +80,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { Document, Picture } from '@element-plus/icons-vue';
 import SparkMD5 from 'spark-md5';
 import apiClient from '../api';
 
@@ -333,5 +355,15 @@ onMounted(fetchFileList);
 .upload-speed, .elapsed-time {
   font-size: 12px;
   color: #909399;
+}
+.image-slot-error, .file-icon-placeholder {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  background: #f5f7fa;
+  color: #c0c4cc;
+  font-size: 24px;
 }
 </style> 
