@@ -2,49 +2,44 @@ package org.example.miniodemo.config;
 
 import io.minio.MinioClient;
 import lombok.Data;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
 @Data
 @Configuration
+@ConfigurationProperties(prefix = "minio")
 public class MinioConfig {
     
     /**
      * MinIO服务器的内部访问端点。
      */
-    @Value("${minio.endpoint}")
     private String endpoint;
     
     /**
      * MinIO服务器的外部（公开）访问端点。
      */
-    @Value("${minio.public-endpoint}")
     private String publicEndpoint;
     
     /**
      * 访问MinIO的Access Key。
      */
-    @Value("${minio.access-key}")
     private String accessKey;
     
     /**
      * 访问MinIO的Secret Key。
      */
-    @Value("${minio.secret-key}")
     private String secretKey;
 
     /**
      * 预签名URL的过期时间（单位：分钟）。
      */
-    @Value("${minio.url-expiry-minutes}")
     private Integer urlExpiryMinutes;
 
     /**
      * 孤儿分片清理任务的阈值（单位：小时）。
      */
-    @Value("${minio.chunk-cleanup-hours}")
     private Integer chunkCleanupHours;
     
     /**

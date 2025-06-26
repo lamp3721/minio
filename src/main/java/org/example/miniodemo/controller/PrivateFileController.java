@@ -98,7 +98,7 @@ public class PrivateFileController {
     @PostMapping("/check")
     public R<FileExistsDto> checkFileExists(@RequestBody CheckRequestDto checkRequest) {
         try {
-            boolean exists = privateFileService.checkFileExists(checkRequest.getFileHash(),StorageType.PRIVATE);
+            boolean exists = privateFileService.checkFileExists(checkRequest.getFileHash()).isPresent();
             return R.success(new FileExistsDto(exists));
         } catch (Exception e) {
             log.error("检查文件失败: {}", e.getMessage(), e);

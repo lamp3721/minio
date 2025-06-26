@@ -46,7 +46,7 @@ public class ScheduledCleanupService {
      * </ol>
      * 此机制确保了即使文件上传过程异常中断，残留的分片数据也最终会被自动回收。
      */
-    @Scheduled(cron = "0 0 2 * * ?") // 每天凌晨2点执行
+    @Scheduled(cron = "${minio.cleanup-cron}") // 从配置文件读取cron表达式
     public void cleanupOrphanedChunks() {
         log.info("开始执行孤儿分片清理任务...");
 

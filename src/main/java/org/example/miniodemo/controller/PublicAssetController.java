@@ -19,6 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * 处理公共资源（Public Assets）相关操作的API控制器。
@@ -61,8 +62,9 @@ public class PublicAssetController {
     @PostMapping("/check")
     public R<FileExistsDto> checkFileExists(@RequestBody CheckRequestDto checkRequest) {
         try {
-            FileMetadata metadata = publicAssetService.checkAndGetFileMetadata(checkRequest.getFileHash(), StorageType.PUBLIC);
-            if (metadata != null) {
+            Optional<FileMetadata> metadataOptional = publicAssetService.checkFileExists(checkRequest.getFileHash());
+            if (metadataOptional.isPresent()) {
+                FileMetadata metadata = metadataOptional.get();
                 String url = publicAssetService.getPublicUrlFor(metadata.getObjectName());
                 return R.success(new FileExistsDto(true, url));
             } else {
@@ -72,27 +74,6 @@ public class PublicAssetController {
             log.error("检查公共文件失败: {}", e.getMessage(), e);
             // 出现异常时，为安全起见，返回false，让前端继续走上传流程
             return R.success(new FileExistsDto(false));
-        }
-    }
-
-    /**
-     * 上传一个公共资源文件。(此方法在新的分片上传流程中已废弃)
-     *
-     * @param file     通过 multipart/form-data 方式上传的文件。
-     * @param fileHash 该文件的内容哈希值 (通常为MD5)，用于实现"秒传"和文件完整性校验。
-     * @return 包含上传成功后文件的永久公开访问URL的响应体。
-     */
-    @PostMapping("/upload")
-    public R<String> uploadPublicImage(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam("fileHash") String fileHash
-    ) {
-        try {
-            String url = publicAssetService.uploadPublicImage(file, fileHash);
-            return R.success(url);
-        } catch (Exception e) {
-            log.error("上传公共图片失败", e);
-            return R.error(ResultCode.FILE_UPLOAD_FAILED, "上传失败");
         }
     }
 
@@ -148,14 +129,14 @@ public class PublicAssetController {
     @PostMapping("/upload/merge")
     public R<String> mergePublicChunks(@RequestBody MergeRequestDto mergeRequest) {
         try {
-            String url = publicAssetService.mergeChunks(
+            FileMetadata metadata = publicAssetService.mergeChunks(
                     mergeRequest.getBatchId(),
                     mergeRequest.getFileName(),
                     mergeRequest.getFileHash(),
                     mergeRequest.getContentType(),
                     mergeRequest.getFileSize()
             );
-
+            String url = publicAssetService.getPublicUrlFor(metadata.getObjectName());
             return R.success(url);
         } catch (Exception e) {
             log.error("公共库文件合并失败: {}", e.getMessage(), e);
