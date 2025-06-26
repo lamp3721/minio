@@ -1,4 +1,17 @@
 minio:
-  endpoint: http://jenasi.ai:900
+  endpoint: http://192.168.1.177:900
+  public-endpoint: http://jenasi.ai:900
   access-key: QDWe46Cm2K4UmKewzZck
   secret-key: W4Mrd4GTajP28F8WS06PmGAvUUfKSTPavskCEIdq
+
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/minio?useSSL=false&serverTimezone=UTC
+    username: root
+    password: 123456
+    driver-class-name: com.mysql.cj.jdbc.Driver
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl  # 或 slf4j
+  mapper-locations: classpath:mapper/*.xml  # 若使用 XML Mapper

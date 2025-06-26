@@ -7,13 +7,17 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import java.util.Date;
 import lombok.Data;
 
+import java.io.Serializable;
+
 /**
  * MinIO文件元数据表
  * @TableName file_metadata
  */
 @TableName(value ="file_metadata")
 @Data
-public class FileMetadata {
+public class FileMetadata implements Serializable {
+    private static final long serialVersionUID = 1L;
+
     /**
      * 记录的唯一ID，主键
      */
@@ -53,7 +57,7 @@ public class FileMetadata {
     /**
      * 存储类型（PUBLIC 或 PRIVATE）
      */
-    private String storageType;
+    private StorageType storageType;
 
     /**
      * （预留）关联的用户ID

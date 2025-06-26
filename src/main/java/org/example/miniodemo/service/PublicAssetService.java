@@ -17,6 +17,7 @@ import org.example.miniodemo.config.MinioBucketConfig;
 import org.example.miniodemo.config.MinioConfig;
 import org.example.miniodemo.controller.PublicAssetController;
 import org.example.miniodemo.domain.FileMetadata;
+import org.example.miniodemo.domain.StorageType;
 import org.example.miniodemo.dto.FileDetailDto;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -73,7 +74,7 @@ public class PublicAssetService {
     public boolean checkFileExists(String fileHash, String storageType) {
         LambdaQueryWrapper<FileMetadata> eq = new LambdaQueryWrapper<FileMetadata>()
                 .eq(FileMetadata::getContentHash, fileHash)
-                .eq(FileMetadata::getStorageType, storageType);
+                .eq(FileMetadata::getStorageType, StorageType.PUBLIC);
         FileMetadata fileMetadata = fileMetadataService.getOne(eq);
         if (fileMetadata != null) {
             log.info("【秒传检查 - 公开库】文件已存在 (hash:{})。将触发秒传。", fileHash);
@@ -160,7 +161,7 @@ public class PublicAssetService {
         metadata.setContentType(file.getContentType());
         metadata.setContentHash(fileHash);
         metadata.setBucketName(bucketConfig.getPublicAssets());
-        metadata.setStorageType("PUBLIC");
+        metadata.setStorageType(StorageType.PUBLIC);
 
         boolean save = fileMetadataService.save(metadata);
 
@@ -181,7 +182,7 @@ public class PublicAssetService {
         //从当中解析出hash
         String hash = extractHash(objectName);
         //删除元数据
-        fileMetadataService.remove(new LambdaQueryWrapper<FileMetadata>().eq(FileMetadata::getContentHash, hash).eq(FileMetadata::getStorageType, "PUBLIC"));
+        fileMetadataService.remove(new LambdaQueryWrapper<FileMetadata>().eq(FileMetadata::getContentHash, hash).eq(FileMetadata::getStorageType, StorageType.PUBLIC));
 
         minioClient.removeObject(
                 RemoveObjectArgs.builder()

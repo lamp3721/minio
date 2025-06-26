@@ -13,6 +13,7 @@ import org.example.miniodemo.config.MinioBucketConfig;
 import org.example.miniodemo.config.MinioConfig;
 import org.example.miniodemo.controller.PrivateFileController;
 import org.example.miniodemo.domain.FileMetadata;
+import org.example.miniodemo.domain.StorageType;
 import org.example.miniodemo.dto.FileDetailDto;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -75,7 +76,7 @@ public class PrivateFileService {
 
         LambdaQueryWrapper<FileMetadata> eq = new LambdaQueryWrapper<FileMetadata>()
                 .eq(FileMetadata::getContentHash, fileHash)
-                .eq(FileMetadata::getStorageType, storageType);
+                .eq(FileMetadata::getStorageType, StorageType.PRIVATE);
         FileMetadata fileMetadata = fileMetadataService.getOne(eq);
         if (fileMetadata != null) {
             log.info("【秒传检查 - 私有库】文件已存在 (hash:{})。将触发秒传。", fileHash);
@@ -195,7 +196,7 @@ public class PrivateFileService {
             metadata.setContentType(contentType);
             metadata.setContentHash(fileHash);
             metadata.setBucketName(bucketConfig.getPrivateFiles());
-            metadata.setStorageType("PRIVATE");
+            metadata.setStorageType(StorageType.PRIVATE);
             fileMetadataService.save(metadata);
 
             log.info("【文件合并 - 私有库】文件合并成功。最终对象路径: '{}'。", finalObjectName);
@@ -275,7 +276,7 @@ public class PrivateFileService {
     public void deletePrivateFile(String objectName) throws Exception {
         //从当中解析出hash
         String hash = extractHash(objectName);
-        fileMetadataService.remove(new LambdaQueryWrapper<FileMetadata>().eq(FileMetadata::getContentHash, hash).eq(FileMetadata::getStorageType, "PRIVATE"));
+        fileMetadataService.remove(new LambdaQueryWrapper<FileMetadata>().eq(FileMetadata::getContentHash, hash).eq(FileMetadata::getStorageType, StorageType.PRIVATE));
 
         internalMinioClient.removeObject(
                 RemoveObjectArgs.builder().bucket(bucketConfig.getPrivateFiles()).object(objectName).build());
