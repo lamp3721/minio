@@ -1,6 +1,6 @@
 spring:
   profiles:
-    active: dev # dev, prod
+    active: prod # dev, prod
 
 minio:
   url-expiry-minutes: 15 # 新增：预签名URL过期时间（分钟）
