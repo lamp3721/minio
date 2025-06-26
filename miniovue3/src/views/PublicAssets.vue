@@ -42,13 +42,15 @@
           <el-button type="success" @click="fetchFileList" :loading="loading">刷新</el-button>
         </div>
       </template>
-      <el-table :data="fileList" v-loading="loading" style="width: 100%">
+      <el-table :data="fileListWithPreviewIndex" v-loading="loading" style="width: 100%">
         <el-table-column label="预览" width="100">
           <template #default="scope">
             <el-image
                 v-if="scope.row.contentType && scope.row.contentType.startsWith('image/')"
                 :src="scope.row.url"
-                :preview-src-list="[scope.row.url]"
+                :preview-src-list="imagePreviewList"
+                :initial-index="scope.row.previewIndex"
+                preview-teleported
                 style="width: 60px; height: 60px; border-radius: 4px;"
                 fit="cover"
                 lazy
@@ -78,7 +80,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Document, Picture } from '@element-plus/icons-vue';
 import SparkMD5 from 'spark-md5';
@@ -92,6 +94,26 @@ const uploadSpeed = ref('');
 const isUploading = ref(false);
 const elapsedTime = ref('');
 const uploadTimer = ref(null);
+
+const imagePreviewList = computed(() => {
+  return fileList.value
+      .filter(file => file.contentType && file.contentType.startsWith('image/'))
+      .map(file => file.url);
+});
+
+// 为图片文件添加在预览列表中的索引，方便预览时定位
+const fileListWithPreviewIndex = computed(() => {
+  const images = fileList.value.filter(file => file.contentType && file.contentType.startsWith('image/'));
+  return fileList.value.map(file => {
+    if (file.contentType && file.contentType.startsWith('image/')) {
+      return {
+        ...file,
+        previewIndex: images.findIndex(img => img.url === file.url)
+      };
+    }
+    return file;
+  });
+});
 
 const CHUNK_SIZE = 5 * 1024 * 1024;
 
