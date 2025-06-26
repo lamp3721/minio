@@ -1,143 +1,136 @@
-# Spring Boot + Vue + MinIO 文件管理系统
+# Modern MinIO File Service
 
-本项目是一个功能完善、架构清晰的现代文件管理系统，采用前后端分离模式开发。后端基于 Spring Boot 和 MinIO，前端基于 Vue 3 和 Element Plus，实现了对私有文件和公共资源的完整管理能力，尤其对大文件上传场景进行了深度优化。
+这是一个基于 Spring Boot 和 Vue 3 构建的现代化、高性能文件存储服务。它深度整合了 MinIO 对象存储，并提供了一套完整的解决方案，用于管理私有和公共文件。项目不仅实现了文件服务的基础功能，更通过精心设计的架构和优化策略，展现了企业级应用的良好实践。
 
 ## ✨ 核心功能
 
-- **私有/公共文件分离**：支持两种存储模式，公共资源可通过URL直接访问，私有文件则需要授权访问。
-- **分片上传**：支持将大文件切分成小块进行并发上传，极大提升了大文件上传的稳定性和效率。
-- **断点续传**：在分片上传的基础上，实现了上传任务中断后可从断点处恢复上传，无需从头开始，优化了弱网环境下的用户体验。
-- **秒传**：在上传前通过文件哈希值进行比对，若文件已存在于服务器，则直接完成上传，避免了重复数据传输，节省了时间和存储空间。
-- **文件与元数据管理**：将文件对象存入MinIO，同时在数据库中记录其元数据，实现了业务信息与文件实体的关联。
-- **孤儿分片自动清理**：通过后台定时任务，自动清理因上传失败或中断而产生的临时分片文件，保障了存储空间的清洁。
-- **动态预签名URL**：为私有文件提供带时效性的安全下载链接。
+- **双存储模式**：支持**公共资源库**（Public Assets）和**私有文件库**（Private Files）两种模式。
+  - **公共资源**：文件可通过永久公开链接直接访问，适合存放图片、CSS等静态资源。
+  - **私有文件**：文件访问受限，必须通过生成的**预签名URL**（有时效性）或后端代理才能安全下载。
+- **高性能上传**：
+  - **分片上传**：支持将大文件分割成小块并发上传。
+  - **断点续传**：上传意外中断后，可以从上次的进度继续，无需从头开始。
+  - **秒传**：如果服务器已存在相同内容的文件，系统会通过文件哈希（MD5）识别，瞬间完成上传，避免重复存储。
+- **完善的后端服务**：
+  - **自动清理**：通过定时任务（Scheduled Task），自动清理因各种原因残留在服务器上的"孤儿"临时分片，保证存储空间不被浪费。
+  - **访问时间追踪**：自动记录文件的最后访问时间，为后续的数据生命周期管理提供依据。
+- **友好的前端界面**：
+  - 基于 Vue 3 和 Element Plus 构建，提供清晰、易用的文件上传和列表管理界面。
+  - 实时显示上传进度、速度和预估耗时，提升用户体验。
 
 ## 🛠️ 技术栈
 
-| 分类         | 技术                                                                  | 说明                                     |
-| ------------ | --------------------------------------------------------------------- | ---------------------------------------- |
-| **后端**     | `Java` `Spring Boot` `Spring MVC` `MyBatis-Plus` `MinIO Java SDK`       | 负责提供RESTful API、业务逻辑和数据持久化。 |
-| **前端**     | `Vue 3` `Vite` `Element Plus` `Axios` `spark-md5` `vue-router` | 负责构建用户交互界面和前端逻辑。           |
-| **对象存储** | `MinIO`                                                               | 作为项目的文件存储后端。                 |
-| **数据库**   | 任意 `MyBatis-Plus` 支持的关系型数据库 (如: `MySQL`)                  | 存储文件的元数据信息。                   |
+| 分类     | 技术                               |
+| :------- | :--------------------------------- |
+| **后端** | Spring Boot 3, Java 17, Maven      |
+| **数据库** | MySQL, MyBatis-Plus                |
+| **对象存储** | MinIO                              |
+| **前端**   | Vue 3, Vite, Element Plus, Axios |
+| **其他**   | Lombok, Spark-MD5, UUID            |
 
-## 📁 项目结构
+## 📂 项目结构（后端）
+
+后端项目遵循了经典的分层架构，职责清晰，易于维护。
 
 ```
-miniodemo
-├── pom.xml               # 后端Maven依赖
-├── src/main/java         # 后端Java源码
-│   └── org/example/miniodemo
-│       ├── common          # 通用工具类、响应封装
-│       ├── config          # Spring Boot配置类
-│       ├── controller      # API控制器
-│       ├── domain          # 领域模型/实体类
-│       ├── dto             # 数据传输对象
-│       ├── mapper          # MyBatis-Plus Mapper接口
-│       ├── repository      # 仓储层接口与实现
-│       └── service         # 业务逻辑服务
-└── miniovue3             # 前端Vue项目源码
-    ├── public              # 静态资源
-    ├── src
-    │   ├── api.js          # Axios封装与API客户端
-    │   ├── assets          # 样式、图片等资源
-    │   ├── components      # (可扩展)通用组件
-    │   ├── router          # 路由配置
-    │   └── views           # 页面级视图组件
-    └── package.json        # 前端npm依赖
+src
+└── main
+    └── java
+        └── org.example.miniodemo
+            ├── common           # 通用工具类 (响应封装, 工具类)
+            ├── config           # 应用配置 (MinIO, CORS, 文件上传)
+            ├── controller       # API 控制器 (RESTful 接口)
+            ├── domain           # 领域模型 (数据库实体, 枚举)
+            ├── dto              # 数据传输对象 (用于API请求和响应)
+            ├── mapper           # MyBatis-Plus Mapper 接口
+            ├── repository       # 数据仓库层 (封装数据访问逻辑)
+            ├── service          # 核心业务逻辑层
+            │   ├── storage      # (抽象的)对象存储服务接口与实现
+            │   └── (impl)       # 具体的业务服务实现
+            ├── GlobalExceptionHandler.java  # 全局异常处理器
+            └── MiniodemoApplication.java    # Spring Boot 主启动类
 ```
 
-## 🚀 快速启动
+## 🚀 快速开始
 
-### 准备环境
+### 1. 环境准备
 
-1.  安装并运行 `Java 17+` 和 `Maven`。
-2.  安装并运行 `Node.js 16+` 和 `npm`。
-3.  启动一个 `MinIO` 服务实例。
-4.  启动一个 `MySQL` 或其他关系型数据库服务实例。
+- **Java**: `17` 或更高版本
+- **Maven**: `3.6` 或更高版本
+- **MySQL**: `8.0` 或更高版本
+- **MinIO**: 最新稳定版
+- **Node.js**: `16` 或更高版本 (用于运行前端)
 
-### 后端启动
+### 2. 后端配置与启动
 
-1.  **配置**：修改 `src/main/resources/application-dev.yml` 文件，填入正确的数据库连接信息和MinIO服务信息（地址、accessKey、secretKey）。
-2.  **创建数据库表**：根据 `FileMetadata.java` 实体类的结构，在数据库中手动创建 `file_metadata` 表，或使用代码生成工具。
-3.  **运行**：在项目根目录下执行 `mvn spring-boot:run`，或直接通过IDE启动 `MiniodemoApplication`。
-4.  **初始化存储桶 (Bucket)**：项目启动后，建议先调用一次初始化接口，以确保MinIO中存在配置文件中指定的存储桶。
+1.  **克隆项目**：
     ```bash
-    # 使用 Postman, curl 或其他工具发送一个POST请求
-    POST http://localhost:8080/api/minio/buckets/init
+    git clone [your-repository-url]
+    cd miniodemo
     ```
 
-### 前端启动
+2.  **配置MinIO**：
+    - 启动您自己的MinIO服务。
+    - 修改 `src/main/resources/application-dev.yml` 文件，填入您MinIO服务的正确信息：
+      ```yaml
+      minio:
+        endpoint: http://your-minio-ip:9000
+        public-endpoint: http://your-public-ip:9000 # 如果从公网访问，请使用公网IP
+        access-key: your-minio-access-key
+        secret-key: your-minio-secret-key
+      ```
 
-1.  进入前端项目目录：`cd miniovue3`。
-2.  安装依赖：`npm install`。
-3.  **配置代理**：`vite.config.js` 中已配置了 `/api` 代理，它会将前端 `http://localhost:5173/api` 的请求转发到后端 `http://localhost:8080/api`。如有需要可自行修改。
-4.  运行项目：`npm run dev`。
-5.  在浏览器中打开提示的地址 (通常是 `http://localhost:5173`)。
+3.  **配置数据库**：
+    - 在您的MySQL中创建一个新的数据库，例如 `minio_demo`。
+    - 修改 `src/main/resources/application-dev.yml` 文件，填入您的数据库连接信息：
+      ```yaml
+      spring:
+        datasource:
+          url: jdbc:mysql://localhost:3306/minio_demo?useSSL=false
+          username: your-db-username
+          password: your-db-password
+      ```
 
-## 🔬 核心技术实现详解
+4.  **运行后端**：
+    - 使用IDE（如IntelliJ IDEA）直接运行 `MiniodemoApplication.java`。
+    - 或者使用Maven在项目根目录运行：
+      ```bash
+      ./mvnw spring-boot:run
+      ```
+    - 首次运行时，需要向 `POST http://localhost:8080/minio/buckets/init` 发送一个请求来初始化存储桶。
 
-### 1. 分片上传 (Chunked Upload)
+### 3. 前端启动
 
-分片上传是处理大文件的核心，它将一个大文件分解为多个小块独立上传，最后在服务端合并。
+1.  **进入前端目录**：
+    ```bash
+    cd miniovue3
+    ```
+2.  **安装依赖**：
+    ```bash
+    npm install
+    ```
+3.  **启动开发服务器**：
+    ```bash
+    npm run dev
+    ```
+    - Vite会自动处理代理，将API请求转发到后端。
+4.  **访问应用**：
+    - 打开浏览器，访问 `http://localhost:5173` (或命令行提示的其他地址)。
 
--   **前端实现 (`PrivateFiles.vue`)**:
-    1.  **文件切片**：当用户选择文件后，使用 `File.prototype.slice()` 方法将文件对象切成固定大小 (本项目中为 `5MB`) 的 `Blob` 对象数组。
-    2.  **并发请求**：使用 `Promise.all` 并发地为每个分片创建一个上传请求。每个请求都是一个 `FormData` 对象，其中包含三个关键部分：
-        -   `file`: 当前分片的 `Blob` 数据。
-        -   `batchId`: 标识本次上传任务的唯一ID。
-        -   `chunkNumber`: 当前分片的序号（从0开始）。
-    3.  **进度计算**：通过 `axios` 的 `onUploadProgress` 回调，实时获取每个分片的上传进度，然后累加计算出总文件的上传百分比和实时速度。
+## 🏛️ 架构亮点与设计哲学
 
--   **后端实现 (`PrivateFileController` & `PrivateFileService`)**:
-    1.  **接收分片**：控制器提供 `POST /minio/private/upload/chunk` 接口来接收前端发来的分片。
-    2.  **临时存储**：`PrivateFileService` 将每个分片作为一个独立的临时对象上传到MinIO。为了便于管理，所有属于同一次上传任务的分片都被存放在以 `batchId` 命名的"虚拟目录"下，对象名即为其分片序号。例如：`/<bucket-name>/<batchId>/0`, `/<bucket-name>/<batchId>/1`, ...
+- **面向接口编程与依赖倒置**：
+  - 通过 `ObjectStorageService` 接口，我们将业务逻辑与具体的MinIO实现解耦。未来如果想替换成阿里云OSS或S3，只需提供一个新的实现类即可，无需改动上层业务代码。
+- **代码复用 (DRY - Don't Repeat Yourself)**：
+  - `PublicAssetService` 和 `PrivateFileService` 中大量重复的分片上传逻辑被抽象到 `AbstractChunkedFileService` 基类中，极大地减少了代码冗余，提高了可维护性。
+- **异步化提升性能**：
+  - 对于"更新文件访问时间"、"删除临时分片"等非核心、耗时的操作，我们采用了 `@Async` 将其异步化。这使得API可以更快地响应用户请求，将清理工作交由后台线程处理，显著提升了用户体验。
+- **配置驱动与安全性**：
+  - 核心配置项（如数据库连接、MinIO地址、CORS跨域策略）全部外部化到 `application.yml` 文件中，应用的行为由配置驱动，无需硬编码。
+  - CORS策略不再是简单的 `*`，而是从配置文件中读取，可以为开发、生产环境配置不同的安全策略。
+- **优雅的异常处理与事务管理**：
+  - 使用 `@ControllerAdvice` 实现全局异常处理，向前端返回统一、友好的错误信息。
+  - 在文件合并等关键操作上使用了 `@Transactional` 注解，确保了在操作失败时（如数据库写入失败），能够自动回滚，避免了产生脏数据（例如，文件已在MinIO中合并，但数据库无记录）。
 
-### 2. 断点续传 (Resumable Upload)
-
-断点续传是在分片上传基础上的体验优化，允许在上传中断后从上次的进度继续。
-
--   **关键设计**：
-    实现断点续传的核心是需要一个**持久化且唯一**的上传任务ID (`batchId`)。本项目巧妙地采用了**文件的MD5哈希值**作为 `batchId`。因为对于同一个文件，其MD5值是固定不变的。
-
--   **实现流程**:
-    1.  **前端计算哈希**：在上传开始前，前端使用 `spark-md5` 库异步计算完整文件的MD5哈希值。
-    2.  **前端查询断点**：在正式开始上传分片前，前端会先调用一个新增的后端接口 `GET /private/uploaded/chunks`，并附上 `batchId` (即文件哈希) 作为参数。
-    3.  **后端返回进度**：该接口会查询MinIO中 `batchId/` 目录下已存在的所有分片对象，并返回它们的序号列表给前端，例如 `[0, 1, 2, 5, 8]`。
-    4.  **前端跳过上传**：前端拿到这个列表后，在创建并发上传任务时，会检查当前分片的序号是否在该列表中。如果存在，则直接跳过该分片的上传 (`Promise.resolve()`)，只为那些尚未上传的分片创建请求。同时，根据已存在的分片数量，将进度条的初始值设置为一个非零值，给用户"从断点恢复"的直观感受。
-
-### 3. 秒传 (Instant Upload)
-
-秒传是另一种极致的上传优化，当服务器已存在相同文件时，直接完成上传。
-
--   **实现流程**:
-    1.  **前端计算哈希**：与断点续传共享同一步，前端首先计算文件的MD5哈希。
-    2.  **前端查询存在性**：前端调用 `POST /private/check` 接口，将文件哈希发送给后端。
-    3.  **后端数据库查询**：后端 `checkFileExists` 方法并不直接检查MinIO，而是查询**数据库中的 `file_metadata` 表**，看是否存在具有相同 `contentHash` 和 `storageType` 的记录。
-    4.  **快速响应**：
-        -   如果数据库中存在记录，说明文件已存在，后端直接返回 `{ "exists": true }`。
-        -   如果不存在，则返回 `{ "exists": false }`。
-    5.  **前端处理**：如果前端收到 `exists: true` 的响应，则立即中止整个上传流程，并向用户显示"秒传成功"的提示。
-
-### 4. 文件合并 (File Composition)
-
-当所有分片上传完毕后，需要将它们在服务端聚合成一个完整的文件。
-
--   **实现流程**:
-    1.  **前端触发合并**：当前端的所有分片上传 `Promise` 都完成后，它会发起最后一个请求 `POST /private/upload/merge`。
-    2.  **后端执行合并**：`PrivateFileService` 中的 `mergeChunks` 方法负责此逻辑。它并非将分片下载到服务器内存再重新上传，而是利用了 **MinIO 服务端对象合并 (ComposeObject)** 的高效特性。
-    3.  **服务端合并**：后端服务会构建一个源对象列表 (即所有临时分片的路径)，然后向MinIO发送一个 `composeObject` 指令。MinIO会在其内部直接将这些对象拼接成一个新的、完整的最终文件，这个过程**不消耗后端服务的带宽和内存**，效率极高。
-    4.  **原子化操作**：文件合并、保存元数据到数据库、删除临时分片这几个步骤被设计为具有原子性。
-        -   **补偿机制**：如果在合并成功后，保存元数据到数据库的步骤失败，程序会触发一个**补偿逻辑**——自动删除刚刚在MinIO中合并好的最终文件，防止产生没有数据库记录的"孤儿文件"。
-        -   **清理分片**：在所有操作都成功后，程序会批量删除所有临时的分片文件。
-
-### 5. 孤儿分片自动清理
-
-这是一个兜底机制，用于处理因各种异常（如用户关闭浏览器）导致上传流程未完成而遗留在MinIO中的临时分片。
-
--   **实现机制 (`ScheduledCleanupService`)**:
-    1.  **定时任务**：这是一个由 Spring 的 `@Scheduled` 注解触发的定时任务，例如每天凌晨2点执行。
-    2.  **扫描与筛选**：任务会列出私有存储桶中的所有对象，并根据两个条件进行筛选：
-        -   **时间阈值**：对象的最后修改时间是否早于一个设定的阈值（例如24小时前）。
-        -   **路径格式**：对象名是否**不匹配**最终文件的路径格式 ( `YYYY/MM/DD/...` )。
-    3.  **批量删除**：同时满足以上两个条件的对象被认为是"孤儿分片"，程序会调用MinIO的 `removeObjects` 接口将它们批量删除。 
+---
+这个项目是学习和实践现代后端架构的一个优秀范例。欢迎贡献代码，使其更加完善！ 
