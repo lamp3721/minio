@@ -9,6 +9,7 @@ import org.example.miniodemo.domain.StorageType;
 import org.example.miniodemo.dto.CheckRequestDto;
 import org.example.miniodemo.dto.FileDetailDto;
 import org.example.miniodemo.dto.FileExistsDto;
+import org.example.miniodemo.dto.MergeRequestDto;
 import org.example.miniodemo.service.PublicAssetService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -75,7 +76,7 @@ public class PublicAssetController {
     }
 
     /**
-     * 上传一个公共资源文件。
+     * 上传一个公共资源文件。(此方法在新的分片上传流程中已废弃)
      *
      * @param file     通过 multipart/form-data 方式上传的文件。
      * @param fileHash 该文件的内容哈希值 (通常为MD5)，用于实现"秒传"和文件完整性校验。
@@ -92,6 +93,73 @@ public class PublicAssetController {
         } catch (Exception e) {
             log.error("上传公共图片失败", e);
             return R.error(ResultCode.FILE_UPLOAD_FAILED, "上传失败");
+        }
+    }
+
+    /**
+     * 上传单个公共文件分片。
+     *
+     * @param file        文件分片数据。
+     * @param batchId     唯一批次ID。
+     * @param chunkNumber 分片序号。
+     * @return 操作结果。
+     */
+    @PostMapping("/upload/chunk")
+    public R<String> uploadPublicChunk(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("batchId") String batchId,
+            @RequestParam("chunkNumber") Integer chunkNumber) {
+
+        if (file.isEmpty() || batchId.isBlank()) {
+            return R.error(ResultCode.BAD_REQUEST, "文件、批次ID或分片序号不能为空");
+        }
+        try {
+            publicAssetService.uploadChunk(file, batchId, chunkNumber);
+            return R.success("分片 " + chunkNumber + " 上传成功");
+        } catch (Exception e) {
+            log.error("公共库分片上传失败: {}", e.getMessage(), e);
+            return R.error(ResultCode.FILE_UPLOAD_FAILED, "分片上传失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 检查并返回已上传的分片列表，用于断点续传。
+     *
+     * @param batchId 唯一标识本次文件上传任务的批次ID。
+     * @return 包含已上传分片序号列表的响应体。
+     */
+    @GetMapping("/uploaded/chunks")
+    public R<List<Integer>> getUploadedChunks(@RequestParam("batchId") String batchId) {
+        try {
+            List<Integer> chunkNumbers = publicAssetService.getUploadedChunkNumbers(batchId);
+            return R.success(chunkNumbers);
+        } catch (Exception e) {
+            log.error("获取公共库已上传分片列表失败: {}", e.getMessage(), e);
+            return R.error(ResultCode.INTERNAL_SERVER_ERROR, Collections.emptyList());
+        }
+    }
+
+    /**
+     * 通知服务器合并指定批次的所有公共文件分片。
+     *
+     * @param mergeRequest 包含文件合并所需全部信息的请求体。
+     * @return 包含最终文件公开URL的响应体。
+     */
+    @PostMapping("/upload/merge")
+    public R<String> mergePublicChunks(@RequestBody MergeRequestDto mergeRequest) {
+        try {
+            String url = publicAssetService.mergeChunks(
+                    mergeRequest.getBatchId(),
+                    mergeRequest.getFileName(),
+                    mergeRequest.getFileHash(),
+                    mergeRequest.getContentType(),
+                    mergeRequest.getFileSize()
+            );
+
+            return R.success(url);
+        } catch (Exception e) {
+            log.error("公共库文件合并失败: {}", e.getMessage(), e);
+            return R.error(ResultCode.MERGE_FAILED, "文件合并失败: " + e.getMessage());
         }
     }
 

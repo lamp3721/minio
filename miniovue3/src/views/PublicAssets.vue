@@ -3,207 +3,299 @@
     <el-card class="box-card">
       <template #header>
         <div class="card-header">
-          <span>上传公开图片</span>
+          <span>上传公共文件</span>
         </div>
       </template>
       <el-upload
-          :http-request="handlePublicUpload"
-          :show-file-list="false"
-          :before-upload="beforeImageUpload"
-          accept="image/*"
+          ref="uploadRef"
+          :http-request="handleUpload"
+          :on-exceed="handleExceed"
+          :limit="1"
+          :auto-upload="true"
+          class="file-uploader"
       >
-        <el-button type="primary">点击上传</el-button>
+        <template #trigger>
+          <el-button type="primary">选择文件</el-button>
+        </template>
         <template #tip>
           <div class="el-upload__tip">
-            只能上传图片文件，文件将公开访问。支持秒传。
+            支持大文件分片上传，文件将公开访问。
           </div>
         </template>
       </el-upload>
-       <div v-if="uploadStatus" class="upload-status">
-        {{ uploadStatus }}
-      </div>
-    </el-card>
-
-    <el-card class="box-card">
-      <template #header>
-        <div class="card-header">
-          <span>已上传的公开资源</span>
-           <el-button type="success" @click="fetchPublicFiles" :loading="loading">刷新</el-button>
-        </div>
-      </template>
-      <div v-if="loading" class="loading-container">
-        <p>加载中...</p>
-      </div>
-      <div v-else-if="publicFiles.length === 0" class="empty-container">
-        <p>暂无公开资源</p>
-      </div>
-      <div v-else class="image-gallery">
-        <div v-for="file in publicFiles" :key="file.url" class="image-card">
-          <el-image :src="file.url" fit="contain" lazy class="gallery-image"/>
-          <div class="image-info">
-            <div class="file-details">
-              <span class="image-name" :title="file.name">{{ file.name }}</span>
-              <span class="file-size">{{ formatFileSize(file.size) }}</span>
-            </div>
-            <div class="actions">
-              <el-button size="small" type="success" @click="handleCopyPublicLink(file)">复制链接</el-button>
-              <el-button size="small" type="danger" @click="handleDelete(file)">删除</el-button>
-            </div>
+      <div v-if="uploadProgress.percentage > 0" class="progress-container">
+        <el-progress :percentage="uploadProgress.percentage" :text-inside="true" :stroke-width="20" class="progress-bar"/>
+        <div class="progress-info">
+          <span>{{ uploadProgress.status }}</span>
+          <div class="sub-info">
+            <span v-if="uploadSpeed" class="upload-speed">{{ uploadSpeed }}</span>
+            <span v-if="elapsedTime" class="elapsed-time">耗时: {{ elapsedTime }}</span>
           </div>
         </div>
       </div>
+    </el-card>
+
+    <el-card class="box-card file-list-card">
+      <template #header>
+        <div class="card-header">
+          <span>公共文件列表</span>
+          <el-button type="success" @click="fetchFileList" :loading="loading">刷新</el-button>
+        </div>
+      </template>
+      <el-table :data="fileList" v-loading="loading" style="width: 100%">
+        <el-table-column prop="name" label="文件名" />
+        <el-table-column prop="size" label="大小" :formatter="formatFileSize" />
+        <el-table-column label="操作" width="200">
+          <template #default="scope">
+            <el-button size="small" type="success" @click="handleCopyPublicLink(scope.row)">复制链接</el-button>
+            <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
     </el-card>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue';
-import axios from 'axios';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import SparkMD5 from 'spark-md5';
-import apiClient from '../api'; // 导入共享的 apiClient 实例
+import apiClient from '../api';
 
+const uploadRef = ref(null);
+const fileList = ref([]);
 const loading = ref(false);
-const publicFiles = ref([]);
-const uploadStatus = ref('');
+const uploadProgress = ref({ percentage: 0, status: '' });
+const uploadSpeed = ref('');
+const isUploading = ref(false);
+const elapsedTime = ref('');
+const uploadTimer = ref(null);
 
-const formatFileSize = (size) => {
-  if (!size) return '0 B';
-  const i = Math.floor(Math.log(size) / Math.log(1024));
-  return `${(size / Math.pow(1024, i)).toFixed(2)} ${['B', 'KB', 'MB', 'GB', 'TB'][i]}`;
-};
+const CHUNK_SIZE = 5 * 1024 * 1024;
 
 const calculateFileHash = (file) => {
   return new Promise((resolve, reject) => {
     const spark = new SparkMD5.ArrayBuffer();
     const fileReader = new FileReader();
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    let currentChunk = 0;
+
     fileReader.onload = (e) => {
       spark.append(e.target.result);
-      resolve(spark.end());
+      currentChunk++;
+      if (currentChunk < totalChunks) {
+        loadNext();
+      } else {
+        const hash = spark.end();
+        resolve(hash);
+      }
     };
     fileReader.onerror = () => reject('文件读取失败');
-    fileReader.readAsArrayBuffer(file);
+
+    function loadNext() {
+      const start = currentChunk * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, file.size);
+      fileReader.readAsArrayBuffer(file.slice(start, end));
+    }
+    loadNext();
   });
 };
 
-const fetchPublicFiles = async () => {
+const fetchFileList = async () => {
   loading.value = true;
   try {
-    // 注意：这里我们假设后端有一个/public/list接口
-    // 经过拦截器处理，这里直接得到 res.data
-    publicFiles.value = await apiClient.get('/public/list');
+    fileList.value = await apiClient.get('/public/list');
   } catch (error) {
-    ElMessage.error('获取公开资源列表失败！');
     console.error(error);
   } finally {
     loading.value = false;
   }
 };
 
-const handlePublicUpload = async (options) => {
-  const file = options.file;
-  uploadStatus.value = '正在计算文件Hash...';
-  console.log('【公共资源】开始上传流程...');
-
-  let fileHash;
+const handleCopyPublicLink = async (row) => {
   try {
-    console.log('【公共资源】开始计算文件哈希...');
-    fileHash = await calculateFileHash(file);
-    uploadStatus.value = `文件Hash: ${fileHash}`;
-    console.log(`【公共资源】哈希计算完成: ${fileHash}`);
-  } catch (e) {
-    ElMessage.error(e);
-    uploadStatus.value = 'Hash计算失败！';
-    return;
-  }
-
-  try {
-    console.log(`【公共资源】向后端发送检查请求，哈希: ${fileHash}`);
-    // 经过拦截器处理，这里直接得到 res.data
-    const checkResult = await apiClient.post('/public/check', { fileHash, fileName: file.name });
-    console.log(`【公共资源】收到后端检查响应:`, checkResult);
-    if (checkResult.exists) {
-      ElMessage.success('文件已存在，秒传成功！');
-      uploadStatus.value = '秒传成功！';
-      console.log('【公共资源】后端确认文件已存在，触发秒传。');
-      fetchPublicFiles();
-      setTimeout(() => uploadStatus.value = '', 3000);
-      return;
-    }
-  } catch (e) {
-    ElMessage.error('检查文件失败，请稍后重试');
-    uploadStatus.value = '检查文件失败！';
-    return;
-  }
-
-  console.log('【公共资源】后端确认文件不存在，开始执行常规上传。');
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('fileHash', fileHash);
-
-  try {
-    uploadStatus.value = '正在上传...';
-    // 经过拦截器处理，这里直接得到 res.data (如果成功的话)
-    await apiClient.post('/public/upload', formData);
-    ElMessage.success('图片上传成功！');
-    uploadStatus.value = '上传成功！';
-    fetchPublicFiles(); // 刷新列表
-  } catch (error) {
-    ElMessage.error('图片上传失败！');
-    uploadStatus.value = '上传失败！';
-    console.error(error);
-  } finally {
-      setTimeout(() => uploadStatus.value = '', 3000);
-  }
-};
-
-const beforeImageUpload = (file) => {
-  const isImage = file.type.startsWith('image/');
-  if (!isImage) {
-    ElMessage.error('只能上传图片格式!');
-  }
-  return isImage;
-};
-
-const handleCopyPublicLink = async (file) => {
-  try {
-    // 公开资源的URL已经直接可用，无需再向后端请求
-    await navigator.clipboard.writeText(file.url);
+    await navigator.clipboard.writeText(row.url);
     ElMessage.success('公开链接已复制到剪贴板！');
   } catch (error) {
     ElMessage.error('复制链接失败！');
-    console.error('复制公开链接时出错:', error);
   }
 };
 
-const handleDelete = async (file) => {
+const handleDelete = async (row) => {
   try {
-    // 弹出确认对话框，防止用户误操作
-    await ElMessageBox.confirm(`确定要删除公开文件 "${file.name}" 吗？此操作不可恢复。`, '警告', {
-      confirmButtonText: '确定删除',
+    await ElMessageBox.confirm(`确定要删除文件 "${row.name}" 吗？`, '警告', {
+      confirmButtonText: '确定',
       cancelButtonText: '取消',
       type: 'warning',
     });
-
-    // 使用 file.path 删除，因为DTO中不包含hashName，path即是MinIO中的完整对象名
-    // 经过拦截器处理，这里不需要关心返回值
-    await apiClient.delete('/public/delete', { params: { fileName: file.path } });
-
+    await apiClient.delete('/public/delete', { params: { fileName: row.path } });
     ElMessage.success('文件删除成功！');
-    fetchPublicFiles(); // 删除成功后自动刷新列表
+    fetchFileList();
   } catch (error) {
-    if (error !== 'cancel') { // 'cancel' 是用户主动点击取消时 a
-      ElMessage.error('文件删除失败！');
-      console.error('删除公共文件时出错:', error);
-    } else {
-      ElMessage.info('已取消删除操作。');
+    if (error !== 'cancel' && (!error.message || !error.message.includes('cancel'))) {
+      console.error(error);
     }
   }
 };
 
-onMounted(() => {
-  fetchPublicFiles();
-});
+const handleUpload = async (options) => {
+  const file = options.file;
+  if (isUploading.value) {
+    ElMessage.warning('已有文件正在上传中，请稍后再试。');
+    return;
+  }
+  isUploading.value = true;
+  uploadProgress.value = { percentage: 0, status: '正在计算文件Hash...' };
+
+  let fileHash;
+  try {
+    fileHash = await calculateFileHash(file);
+    uploadProgress.value.status = `文件Hash: ${fileHash}`;
+  } catch (e) {
+    ElMessage.error(e);
+    isUploading.value = false;
+    return;
+  }
+
+  const batchId = fileHash;
+  try {
+    const checkResult = await apiClient.post('/public/check', { fileHash });
+    if (checkResult.exists) {
+      ElMessage.success('文件已存在，秒传成功！');
+      uploadProgress.value = { percentage: 100, status: '秒传成功！' };
+      await fetchFileList();
+      isUploading.value = false;
+      setTimeout(() => {
+        if (!isUploading.value) {
+          uploadProgress.value = { percentage: 0, status: '' };
+          if (uploadRef.value) uploadRef.value.clearFiles();
+        }
+      }, 3000);
+      return;
+    }
+  } catch (e) {
+    isUploading.value = false;
+    return;
+  }
+
+  let uploadedChunks = [];
+  try {
+    uploadedChunks = await apiClient.get('/public/uploaded/chunks', { params: { batchId } });
+    if (uploadedChunks && uploadedChunks.length > 0) {
+      ElMessage.info(`检测到上次上传进度，将从断点处继续上传。`);
+    }
+  } catch (e) {
+    ElMessage.warning('检查断点失败，将从头开始上传。');
+  }
+
+  const chunkCount = Math.ceil(file.size / CHUNK_SIZE);
+  const chunks = Array.from({ length: chunkCount }, (v, i) =>
+      file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE)
+  );
+
+  const initialLoaded = uploadedChunks.reduce((acc, chunkIndex) => {
+    if (chunkIndex < chunks.length) {
+      return acc + chunks[chunkIndex].size;
+    }
+    return acc;
+  }, 0);
+
+  uploadProgress.value = { percentage: Math.floor((initialLoaded / file.size) * 100), status: '准备上传...' };
+  uploadSpeed.value = '';
+  elapsedTime.value = '00:00';
+  let lastLoaded = initialLoaded;
+  let lastTime = Date.now();
+  const startTime = lastTime;
+  let totalLoaded = initialLoaded;
+  uploadTimer.value = setInterval(() => {
+    const seconds = Math.floor((Date.now() - startTime) / 1000);
+    elapsedTime.value = formatDuration(seconds);
+  }, 1000);
+
+  const chunkProgress = new Array(chunkCount).fill(0);
+  uploadedChunks.forEach(chunkIndex => {
+    if (chunkIndex < chunks.length) {
+      chunkProgress[chunkIndex] = chunks[chunkIndex].size;
+    }
+  });
+
+  try {
+    const uploadPromises = chunks.map((chunk, i) => {
+      if (uploadedChunks.includes(i)) {
+        return Promise.resolve();
+      }
+      const formData = new FormData();
+      formData.append('file', chunk);
+      formData.append('batchId', batchId);
+      formData.append('chunkNumber', String(i));
+      return apiClient.post('/public/upload/chunk', formData, {
+        onUploadProgress: (progressEvent) => {
+          chunkProgress[i] = progressEvent.loaded;
+          totalLoaded = chunkProgress.reduce((acc, cur) => acc + cur, 0);
+          const currentTime = Date.now();
+          const deltaTime = (currentTime - lastTime) / 1000;
+          if (deltaTime > 0.5) {
+            const deltaLoaded = totalLoaded - lastLoaded;
+            uploadSpeed.value = `${(deltaLoaded / deltaTime / 1024 / 1024).toFixed(2)} MB/s`;
+            lastLoaded = totalLoaded;
+            lastTime = currentTime;
+          }
+          uploadProgress.value.percentage = Math.floor((totalLoaded / file.size) * 100);
+          uploadProgress.value.status = `正在上传... ${uploadProgress.value.percentage}%`;
+        },
+      });
+    });
+
+    await Promise.all(uploadPromises);
+
+    uploadProgress.value.status = '正在合并文件...';
+    await apiClient.post('/public/upload/merge', {
+      batchId,
+      fileName: file.name,
+      fileHash,
+      fileSize: file.size,
+      contentType: file.type,
+    });
+
+    uploadProgress.value = { percentage: 100, status: '文件上传成功！' };
+    ElMessage.success('文件上传成功！');
+    await fetchFileList();
+
+  } catch (error) {
+    uploadProgress.value.status = '上传失败，请检查网络或联系管理员。';
+    console.error('上传或合并失败:', error);
+  } finally {
+    isUploading.value = false;
+    clearInterval(uploadTimer.value);
+    uploadSpeed.value = '';
+    setTimeout(() => {
+      if (!isUploading.value) {
+        uploadProgress.value = { percentage: 0, status: '' };
+        if (uploadRef.value) uploadRef.value.clearFiles();
+      }
+    }, 5000);
+  }
+};
+
+const handleExceed = () => ElMessage.warning('一次只能上传一个文件。');
+
+const formatFileSize = (row, column, cellValue) => {
+  if (cellValue === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(cellValue) / Math.log(k));
+  return `${parseFloat((cellValue / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+};
+
+const formatDuration = (totalSeconds) => {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = Math.floor(totalSeconds % 60);
+  const padded = (num) => num.toString().padStart(2, '0');
+  return hours > 0 ? `${padded(hours)}:${padded(minutes)}:${padded(seconds)}` : `${padded(minutes)}:${padded(seconds)}`;
+};
+
+onMounted(fetchFileList);
 </script>
 
 <style scoped>
@@ -218,53 +310,28 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
 }
-.image-gallery {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+.progress-container {
+  margin-top: 15px;
+  display: flex;
+  align-items: center;
   gap: 15px;
 }
-.image-card {
-  border: 1px solid #ebeef5;
-  border-radius: 4px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-.gallery-image {
-  width: 100%;
-  height: 180px;
-  background-color: #f5f7fa;
-}
-.image-info {
-  padding: 10px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.file-details {
-  display: flex;
-  flex-direction: column;
+.progress-bar {
   flex-grow: 1;
-  overflow: hidden;
-  margin-right: 10px;
 }
-.image-name {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 14px;
-}
-.file-size {
-    font-size: 12px;
-    color: #909399;
-}
-.actions {
+.progress-info {
   display: flex;
-  flex-shrink: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 120px;
 }
-.loading-container, .empty-container {
-    text-align: center;
-    color: #909399;
-    padding: 40px 0;
+.sub-info {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+.upload-speed, .elapsed-time {
+  font-size: 12px;
+  color: #909399;
 }
 </style> 
