@@ -10,6 +10,11 @@ import java.io.File;
 
 @Configuration
 public class FileUploadConfig {
+    /**
+     * 配置处理 multipart/form-data 请求（即文件上传）的参数。
+     *
+     * @return MultipartConfigElement 实例，包含文件大小限制等配置。
+     */
     @Bean
     public MultipartConfigElement multipartConfigElement() {
         MultipartConfigFactory factory = new MultipartConfigFactory();

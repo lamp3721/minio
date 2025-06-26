@@ -10,32 +10,33 @@ import lombok.Data;
 import java.io.Serializable;
 
 /**
- * MinIO文件元数据表
+ * 对应数据库中的 `file_metadata` 表实体类。
+ * <p>
+ * 用于持久化存储每个已上传文件的核心元数据信息。
+ *
  * @TableName file_metadata
  */
 @TableName(value ="file_metadata")
 @Data
 public class FileMetadata implements Serializable {
-    private static final long serialVersionUID = 1L;
-
     /**
-     * 记录的唯一ID，主键
+     * 主键ID
      */
     @TableId(type = IdType.AUTO)
     private Long id;
 
     /**
-     * 文件在MinIO中存储的唯一名称
+     * 文件在存储桶中的完整对象名称/路径
      */
     private String objectName;
 
     /**
-     * 用户上传时文件的原始名称
+     * 文件的原始名称
      */
     private String originalFilename;
 
     /**
-     * 文件的大小，单位是字节（Bytes）
+     * 文件大小（字节）
      */
     private Long fileSize;
 
@@ -45,12 +46,12 @@ public class FileMetadata implements Serializable {
     private String contentType;
 
     /**
-     * 文件内容的MD5哈希值
+     * 文件的内容哈希值（如MD5）
      */
     private String contentHash;
 
     /**
-     * 文件所在的MinIO存储桶的名称
+     * 文件所在的存储桶名称
      */
     private String bucketName;
 
@@ -60,17 +61,15 @@ public class FileMetadata implements Serializable {
     private StorageType storageType;
 
     /**
-     * （预留）关联的用户ID
+     * 记录创建时间
      */
-    private Long userId;
+    private Date createTime;
 
     /**
-     * 记录的创建时间
+     * 记录更新时间
      */
-    private Date createdAt;
+    private Date updateTime;
 
-    /**
-     * 文件最后一次被访问的时间
-     */
-    private Date lastAccessedAt;
+    @TableField(exist = false)
+    private static final long serialVersionUID = 1L;
 }

@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.common.response.R;
 import org.example.miniodemo.common.response.ResultCode;
 import org.example.miniodemo.domain.FileMetadata;
+import org.example.miniodemo.domain.StorageType;
 import org.example.miniodemo.dto.CheckRequestDto;
 import org.example.miniodemo.dto.FileDetailDto;
 import org.example.miniodemo.dto.FileExistsDto;
@@ -19,10 +20,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 专用于处理公共资源（Public Assets）相关操作的API控制器。
+ * 处理公共资源（Public Assets）相关操作的API控制器。
  * <p>
- * "公共资源"是指存储在公开访问存储桶中的对象，通常是图片、CSS、JS文件等，
- * 可以通过直接的URL链接被浏览器或客户端访问，无需签名。
+ * "公共资源"是指存储在公开访问存储桶中的对象，通常是图片、CSS、JS等前端静态资源，
+ * 它们可以通过直接的URL链接公开访问，无需签名。
  * 所有此控制器下的端点都以 {@code /minio/public} 为前缀。
  */
 @Slf4j
@@ -34,11 +35,9 @@ public class PublicAssetController {
     private final PublicAssetService publicAssetService;
 
     /**
-     * GET /list : 获取公共存储桶中所有文件的列表。
+     * 获取公共存储桶中所有文件的列表。
      *
-     * @return {@link ResponseEntity} 包含一个DTO列表的响应实体，每个DTO代表一个文件。
-     *         成功时返回文件列表和HTTP状态码200 (OK)。
-     *         如果发生内部错误，则返回一个空列表和HTTP状态码500 (Internal Server Error)。
+     * @return 包含所有公共文件详情的列表({@link FileDetailDto})。
      */
     @GetMapping("/list")
     public R<List<FileDetailDto>> listPublicFiles() {
@@ -51,15 +50,17 @@ public class PublicAssetController {
     }
 
     /**
-     * POST /check : 检查文件是否已存在（用于秒传）。
+     * 检查目标文件是否存在于公共存储桶中（用于"秒传"功能）。
+     * <p>
+     * 在上传前，前端可以先调用此接口，通过文件哈希进行检查。
      *
-     * @param checkRequest 包含文件哈希 (fileHash) 和原始文件名 (fileName) 的请求体。
-     * @return {@link ResponseEntity} 返回一个包含布尔值的DTO "exists"。
+     * @param checkRequest 包含文件哈希 (fileHash) 的请求体。
+     * @return 包含检查结果的响应体 ({@link FileExistsDto})。如果文件已存在，会同时返回其公开访问URL。
      */
     @PostMapping("/check")
     public R<FileExistsDto> checkFileExists(@RequestBody CheckRequestDto checkRequest) {
         try {
-            FileMetadata metadata = publicAssetService.checkAndGetFileMetadata(checkRequest.getFileHash());
+            FileMetadata metadata = publicAssetService.checkAndGetFileMetadata(checkRequest.getFileHash(), StorageType.PUBLIC);
             if (metadata != null) {
                 String url = publicAssetService.getPublicUrlFor(metadata.getObjectName());
                 return R.success(new FileExistsDto(true, url));
@@ -74,13 +75,11 @@ public class PublicAssetController {
     }
 
     /**
-     * POST /upload : 上传一个公开的图片文件。
+     * 上传一个公共资源文件。
      *
-     * @param file 由multipart/form-data请求体中名为 "file" 的部分承载的上传文件。不能为空。
-     * @param fileHash 文件的MD5哈希值。
-     * @return {@link ResponseEntity} 包含上传成功后文件的永久公开访问URL的响应实体。
-     *         成功时返回URL字符串和HTTP状态码200 (OK)。
-     *         失败时返回错误信息和HTTP状态码500 (Internal Server Error)。
+     * @param file     通过 multipart/form-data 方式上传的文件。
+     * @param fileHash 该文件的内容哈希值 (通常为MD5)，用于实现"秒传"和文件完整性校验。
+     * @return 包含上传成功后文件的永久公开访问URL的响应体。
      */
     @PostMapping("/upload")
     public R<String> uploadPublicImage(
@@ -97,12 +96,10 @@ public class PublicAssetController {
     }
 
     /**
-     * DELETE /delete : 删除一个公共文件。
+     * 删除一个公共文件。
      *
-     * @param fileName 需要删除的文件的名称（即MinIO中的对象名称）。通过请求参数传递。
-     * @return {@link ResponseEntity} 包含操作结果字符串的响应实体。
-     *         成功时返回 "文件删除成功: [文件名]" 和HTTP状态码200 (OK)。
-     *         失败时返回错误信息和HTTP状态码500 (Internal Server Error)。
+     * @param fileName 需要删除的文件的名称（即在MinIO中的完整对象路径）。
+     * @return 包含操作结果（成功或失败消息）的响应体。
      */
     @DeleteMapping("/delete")
     public R<String> deletePublicFile(@RequestParam("fileName") String fileName) {

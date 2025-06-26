@@ -5,6 +5,9 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
+/**
+ * Spring Boot 应用主启动类。
+ */
 @SpringBootApplication
 @EnableScheduling
 @MapperScan("org.example.miniodemo.mapper")

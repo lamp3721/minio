@@ -3,7 +3,9 @@ package org.example.miniodemo.common.response;
 import lombok.Getter;
 
 /**
- * API 统一返回状态码
+ * API 统一返回状态码枚举。
+ * <p>
+ * 包含了通用的HTTP状态码以及自定义的业务相关状态码。
  */
 @Getter
 public enum ResultCode {
@@ -29,7 +31,13 @@ public enum ResultCode {
     FILE_NOT_EXIST(1007, "文件不存在");
 
 
+    /**
+     * 状态码
+     */
     private final int code;
+    /**
+     * 状态码描述
+     */
     private final String message;
 
     ResultCode(int code, String message) {

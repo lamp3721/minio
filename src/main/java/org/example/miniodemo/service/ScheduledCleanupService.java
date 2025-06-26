@@ -6,6 +6,7 @@ import org.example.miniodemo.domain.StorageObject;
 import org.example.miniodemo.service.storage.ObjectStorageService;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.example.miniodemo.config.MinioConfig;
 
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
@@ -15,8 +16,8 @@ import java.util.stream.Collectors;
 /**
  * 提供定时任务，用于清理系统中的过期临时文件。
  * <p>
- * 这个服务的核心功能是定期扫描并删除那些因上传中断、失败或其他原因而残留的临时文件分片，
- * 从而防止这些"孤儿文件"无限期地占用存储空间。
+ * 核心功能是定期扫描并删除因上传中断或失败而残留的临时文件分片，
+ * 防止这些"孤儿文件"无限期地占用存储空间，是保障系统健康的重要机制。
  */
 @Slf4j
 @Service
@@ -24,31 +25,32 @@ public class ScheduledCleanupService {
 
     private final ObjectStorageService objectStorageService;
     private final MinioBucketConfig bucketConfig;
+    private final MinioConfig minioConfig;
 
-    public ScheduledCleanupService(ObjectStorageService objectStorageService, MinioBucketConfig bucketConfig) {
+    public ScheduledCleanupService(ObjectStorageService objectStorageService, MinioBucketConfig bucketConfig, MinioConfig minioConfig) {
         this.objectStorageService = objectStorageService;
         this.bucketConfig = bucketConfig;
+        this.minioConfig = minioConfig;
     }
 
     /**
-     * 每天凌晨2点执行的定时任务，用于清理超过24小时未被合并的临时分片。
+     * 定时清理孤儿分片任务。
      * <p>
      * <b>执行逻辑:</b>
      * <ol>
-     *     <li>设置一个24小时前的时间点作为清理阈值。</li>
+     *     <li>默认每天凌晨2点执行 (Cron表达式: "0 0 2 * * ?")。</li>
+     *     <li>设置一个时间阈值（如24小时前），早于此阈值的临时文件将被视为过期。</li>
      *     <li>遍历私有存储桶中的所有对象。</li>
-     *     <li>检查每个对象的最后修改时间是否早于24小时前的阈值。</li>
-     *     <li>同时，检查对象的路径是否不符合最终文件的格式 (YYYY/MM/DD/...)。</li>
-     *     <li>同时满足以上两个条件的对象，被识别为"孤儿分片"并予以删除。</li>
-     *     <li>记录被删除的分片总数。</li>
+     *     <li>通过路径格式和最后修改时间筛选出过期的、未被合并的"孤儿分片"。</li>
+     *     <li>批量删除这些孤儿分片，并记录结果。</li>
      * </ol>
-     * 这个机制确保了即使文件上传过程异常中断，残留的分片数据也最终会被自动回收。
+     * 此机制确保了即使文件上传过程异常中断，残留的分片数据也最终会被自动回收。
      */
     @Scheduled(cron = "0 0 2 * * ?") // 每天凌晨2点执行
     public void cleanupOrphanedChunks() {
         log.info("开始执行孤儿分片清理任务...");
 
-        final ZonedDateTime threshold = ZonedDateTime.now().minus(24, ChronoUnit.HOURS);
+        final ZonedDateTime threshold = ZonedDateTime.now().minus(minioConfig.getChunkCleanupHours(), ChronoUnit.HOURS);
         
         try {
             // 扫描整个私有存储桶

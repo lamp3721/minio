@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.common.response.R;
 import org.example.miniodemo.common.response.ResultCode;
 import org.example.miniodemo.domain.FileMetadata;
+import org.example.miniodemo.domain.StorageType;
 import org.example.miniodemo.dto.CheckRequestDto;
 import org.example.miniodemo.dto.FileDetailDto;
 import org.example.miniodemo.dto.FileExistsDto;
@@ -26,7 +27,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 专用于处理私有文件（Private Files）相关操作的API控制器。
+ * 处理私有文件（Private Files）相关操作的API控制器。
  * <p>
  * "私有文件"是指存储在受限访问存储桶中的对象，必须通过预签名URL或后端代理才能访问，
  * 不能直接通过URL公开访问。
@@ -42,12 +43,11 @@ public class PrivateFileController {
     private final PrivateFileService privateFileService;
 
     /**
-     * GET /list : 获取私有存储桶中所有文件的列表。
+     * 获取私有存储桶中所有已合并文件的列表。
      * <p>
-     * 此接口会过滤掉用于分片上传的临时文件，只返回最终合并完成的完整文件。
+     * 此接口会自动过滤掉分片上传过程中产生的临时文件。
      *
-     * @return {@link ResponseEntity} 包含文件信息DTO列表的响应实体。
-     * 成功时返回列表和HTTP 200，失败时返回错误信息和HTTP 500。
+     * @return 包含所有私有文件详情的列表({@link FileDetailDto})。
      */
     @GetMapping("/list")
     public R<List<FileDetailDto>> listPrivateFiles() {
@@ -61,14 +61,14 @@ public class PrivateFileController {
     }
 
     /**
-     * POST /upload/chunk : 上传单个文件分片。
+     * 上传单个文件分片。
      * <p>
-     * 这是分片上传流程的第二步，前端将文件切分后，会为每个分片调用此接口。
+     * 这是分片上传流程的核心步骤，前端将文件切分后，为每个分片调用此接口。
      *
-     * @param file        由multipart/form-data请求体承载的文件分片数据。
-     * @param batchId     唯一标识本次完整文件上传的批次ID，由前端生成。
+     * @param file        通过 multipart/form-data 方式上传的文件分片。
+     * @param batchId     唯一标识本次文件上传任务的批次ID，由前端生成。
      * @param chunkNumber 当前分片的序号（从0开始）。
-     * @return {@link ResponseEntity} 包含操作结果字符串的响应实体。
+     * @return 包含操作结果（成功或失败消息）的响应体。
      */
     @PostMapping("/upload/chunk")
     public R<String> uploadPrivateChunk(
@@ -90,17 +90,15 @@ public class PrivateFileController {
     }
 
     /**
-     * POST /check : 检查文件是否已存在（用于秒传）。
-     * <p>
-     * 在上传前，前端会先计算文件的哈希值，然后调用此接口。
+     * 检查目标文件是否存在于私有存储桶中（用于"秒传"功能）。
      *
-     * @param checkRequest 包含文件哈希 (fileHash) 和原始文件名 (fileName) 的请求体。
-     * @return {@link ResponseEntity} 返回一个包含布尔值的DTO。
+     * @param checkRequest 包含文件哈希 (fileHash) 的请求体。
+     * @return 包含检查结果的响应体({@link FileExistsDto})，其中只包含布尔值 `exists`。
      */
     @PostMapping("/check")
     public R<FileExistsDto> checkFileExists(@RequestBody CheckRequestDto checkRequest) {
         try {
-            boolean exists = privateFileService.checkFileExists(checkRequest.getFileHash(), "PRIVATE");
+            boolean exists = privateFileService.checkFileExists(checkRequest.getFileHash(),StorageType.PRIVATE);
             return R.success(new FileExistsDto(exists));
         } catch (Exception e) {
             log.error("检查文件失败: {}", e.getMessage(), e);
@@ -110,13 +108,12 @@ public class PrivateFileController {
     }
 
     /**
-     * POST /upload/merge : 通知服务器合并指定批次的所有分片。
+     * 通知服务器合并指定批次的所有分片。
      * <p>
-     * 这是分片上传流程的最后一步。当前端所有分片都成功调用 {@code /upload/chunk} 后，
-     * 调用此接口来触发服务器端的文件合并操作。
+     * 这是分片上传流程的最后一步，在所有分片都成功上传后调用。
      *
-     * @param mergeRequest 包含批次ID (batchId)、最终文件名 (fileName) 和文件哈希 (fileHash) 的请求体。
-     * @return {@link ResponseEntity} 包含操作结果字符串的响应实体。
+     * @param mergeRequest 包含文件合并所需全部信息的请求体 ({@link MergeRequestDto})。
+     * @return 包含操作结果（成功或失败消息）的响应体。
      */
     @PostMapping("/upload/merge")
     public R<String> mergePrivateChunks(@RequestBody MergeRequestDto mergeRequest) {
@@ -138,13 +135,13 @@ public class PrivateFileController {
     }
 
     /**
-     * GET /download-url : 获取私有文件的预签名下载URL。
+     * 获取私有文件的预签名下载URL。
      * <p>
-     * 生成一个有时间限制（例如15分钟）的URL，客户端（如浏览器）可以使用此URL直接从MinIO下载文件，
-     * 而无需通过应用服务器代理。这是推荐的高效下载方式。
+     * 生成一个有时效性的URL，客户端可直接使用该URL从对象存储下载文件，数据不经过本应用服务器。
+     * 这是推荐的高效下载方式。
      *
-     * @param fileName 需要下载的文件的完整对象名。
-     * @return {@link ResponseEntity} 包含预签名URL字符串的响应实体。
+     * @param fileName 需要下载的文件的完整对象路径。
+     * @return 包含预签名URL的响应体。
      */
     @GetMapping("/download-url")
     public R<String> getPrivatePresignedDownloadUrl(@RequestParam("fileName") String fileName) {
@@ -158,14 +155,13 @@ public class PrivateFileController {
     }
 
     /**
-     * GET /download : 通过后端服务器代理下载私有文件。
+     * 通过后端服务器代理下载私有文件。
      * <p>
-     * 这种方式会将文件数据从MinIO流经本应用服务器，再转发给客户端。
-     * 它会占用应用服务器的带宽和内存，适用于需要对下载过程进行额外控制（如权限校验、日志记录）的场景，
-     * 但在性能上不如预签名URL。
+     * 文件数据流会从对象存储流经本应用服务器，再转发给客户端。
+     * 这种方式会占用服务器带宽和内存，但适用于需要在下载时进行额外权限控制或日志记录的场景。
      *
-     * @param fileName 需要下载的文件的完整对象名。
-     * @return {@link ResponseEntity} 包含文件数据流的 {@link Resource} 响应实体。
+     * @param fileName 需要下载的文件的完整对象路径。
+     * @return 包含文件数据流的响应实体 ({@link Resource})。
      */
     @GetMapping("/download")
     public ResponseEntity<Resource> downloadPrivateFile(@RequestParam("fileName") String fileName) {
@@ -188,10 +184,10 @@ public class PrivateFileController {
     }
 
     /**
-     * DELETE /delete : 删除一个私有文件。
+     * 删除一个私有文件。
      *
-     * @param fileName 需要删除的文件的完整对象名。
-     * @return {@link ResponseEntity} 包含操作结果字符串的响应实体。
+     * @param fileName 需要删除的文件的完整对象路径。
+     * @return 包含操作结果（成功或失败消息）的响应体。
      */
     @DeleteMapping("/delete")
     public R<String> deletePrivateFile(@RequestParam("fileName") String fileName) {

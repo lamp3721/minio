@@ -12,8 +12,17 @@ import java.io.Serializable;
 @Data
 public class R<T> implements Serializable {
 
+    /**
+     * 业务状态码
+     */
     private int code;
+    /**
+     * 响应消息
+     */
     private String message;
+    /**
+     * 响应数据
+     */
     private T data;
 
     public R(int code, String message, T data) {
