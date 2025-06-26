@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.example.miniodemo.config.MinioConfig;
 import org.example.miniodemo.common.util.FilePathUtil;
+import org.example.miniodemo.service.AsyncFileService;
 
 import java.io.InputStream;
 import java.time.LocalDate;
@@ -41,16 +42,19 @@ public class PrivateFileService {
     private final MinioBucketConfig bucketConfig;
     private final FileMetadataRepository fileMetadataRepository;
     private final MinioConfig minioConfig;
+    private final AsyncFileService asyncFileService;
 
     public PrivateFileService(
             ObjectStorageService objectStorageService,
             MinioBucketConfig bucketConfig,
             FileMetadataRepository fileMetadataRepository,
-            MinioConfig minioConfig) {
+            MinioConfig minioConfig,
+            AsyncFileService asyncFileService) {
         this.objectStorageService = objectStorageService;
         this.bucketConfig = bucketConfig;
         this.fileMetadataRepository = fileMetadataRepository;
         this.minioConfig = minioConfig;
+        this.asyncFileService = asyncFileService;
     }
 
     /**
@@ -229,8 +233,8 @@ public class PrivateFileService {
      * @throws Exception 如果生成URL时出错。
      */
     public String getPresignedPrivateDownloadUrl(String objectName) throws Exception {
-        // 更新最后访问时间
-        updateLastAccessedTime(objectName);
+        // 异步更新最后访问时间
+        asyncFileService.updateLastAccessedTime(objectName);
 
         return objectStorageService.getPresignedDownloadUrl(
                 bucketConfig.getPrivateFiles(),
@@ -248,28 +252,9 @@ public class PrivateFileService {
      * @throws Exception 如果下载时出错。
      */
     public InputStream downloadPrivateFile(String objectName) throws Exception {
-        // 更新最后访问时间
-        updateLastAccessedTime(objectName);
+        // 异步更新最后访问时间
+        asyncFileService.updateLastAccessedTime(objectName);
         return objectStorageService.download(bucketConfig.getPrivateFiles(), objectName);
-    }
-
-    /**
-     * 根据对象名称更新文件的最后访问时间。
-     *
-     * @param objectName 文件的对象路径。
-     */
-    private void updateLastAccessedTime(String objectName) {
-        String hash = FilePathUtil.extractHashFromPath(objectName);
-        if (hash == null) {
-            log.warn("无法从对象路径中提取哈希值，无法更新访问时间: {}", objectName);
-            return;
-        }
-
-        fileMetadataRepository.findByHash(hash, StorageType.PRIVATE).ifPresent(metadata -> {
-            metadata.setLastAccessedAt(new java.util.Date());
-            fileMetadataRepository.update(metadata);
-            log.info("文件 '{}' 的最后访问时间已更新。", objectName);
-        });
     }
 
     /**
