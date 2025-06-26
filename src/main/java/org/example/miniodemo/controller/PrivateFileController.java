@@ -108,6 +108,23 @@ public class PrivateFileController {
     }
 
     /**
+     * 检查并返回已上传的分片列表，用于断点续传。
+     *
+     * @param batchId 唯一标识本次文件上传任务的批次ID。
+     * @return 包含已上传分片序号列表的响应体。
+     */
+    @GetMapping("/uploaded/chunks")
+    public R<List<Integer>> getUploadedChunks(@RequestParam("batchId") String batchId) {
+        try {
+            List<Integer> chunkNumbers = privateFileService.getUploadedChunkNumbers(batchId);
+            return R.success(chunkNumbers);
+        } catch (Exception e) {
+            log.error("获取已上传分片列表失败: {}", e.getMessage(), e);
+            return R.error(ResultCode.INTERNAL_SERVER_ERROR, Collections.emptyList());
+        }
+    }
+
+    /**
      * 通知服务器合并指定批次的所有分片。
      * <p>
      * 这是分片上传流程的最后一步，在所有分片都成功上传后调用。

@@ -61,7 +61,6 @@
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { v4 as uuidv4 } from 'uuid';
 import SparkMD5 from 'spark-md5';
 import apiClient from '../api';
 
@@ -192,6 +191,9 @@ const handleUpload = async (options) => {
     return;
   }
 
+  // 为了实现断点续传，使用文件哈希作为持久化的批次ID
+  const batchId = fileHash;
+
   // 检查文件是否已存在 (秒传)
   try {
     console.log(`【私有文件】向后端发送检查请求，哈希: ${fileHash}`);
@@ -218,29 +220,64 @@ const handleUpload = async (options) => {
     return;
   }
 
+  // --- 断点续传逻辑 ---
+  let uploadedChunks = [];
+  try {
+    console.log(`【断点续传】检查已上传的分片, batchId: ${fileHash}`);
+    uploadedChunks = await apiClient.get('/private/uploaded/chunks', { params: { batchId: fileHash } });
+    if (uploadedChunks && uploadedChunks.length > 0) {
+      ElMessage.info(`检测到上次上传进度，将从断点处继续上传。已完成 ${uploadedChunks.length} 个分片。`);
+      console.log('【断点续传】已存在的分片列表:', uploadedChunks);
+    }
+  } catch(e) {
+    ElMessage.warning('检查断点失败，将从头开始上传。');
+    console.error('【断点续传】检查失败:', e);
+  }
+  // --- 断点续传逻辑结束 ---
+
   console.log('【私有文件】后端确认文件不存在，开始执行分片上传。');
-  const batchId = uuidv4();
   const chunkCount = Math.ceil(file.size / CHUNK_SIZE);
   const chunks = [];
   for (let i = 0; i < chunkCount; i++) {
     chunks.push(file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE));
   }
 
-  uploadProgress.value = { percentage: 0, status: '正在计算文件...' };
+  // --- 优化进度条初始值 ---
+  let initialLoaded = 0;
+  if (uploadedChunks.length > 0) {
+      initialLoaded = uploadedChunks.length * CHUNK_SIZE;
+  }
+  // --- 优化进度条结束 ---
+
+  uploadProgress.value = { percentage: Math.floor((initialLoaded / file.size) * 100), status: '正在计算文件...' };
   uploadSpeed.value = '';
   elapsedTime.value = '00:00';
-  let lastLoaded = 0;
+  let lastLoaded = initialLoaded;
   let lastTime = Date.now();
   const startTime = lastTime;
-  let totalLoaded = 0;
+  let totalLoaded = initialLoaded;
   uploadTimer.value = setInterval(() => {
     const seconds = Math.floor((Date.now() - startTime) / 1000);
     elapsedTime.value = formatDuration(seconds);
   }, 1000);
 
   const chunkProgress = new Array(chunkCount).fill(0);
+  // --- 为已上传的分片预填充进度 ---
+  uploadedChunks.forEach(chunkIndex => {
+      if (chunkIndex < chunkCount) {
+          chunkProgress[chunkIndex] = chunks[chunkIndex] ? chunks[chunkIndex].size : CHUNK_SIZE;
+      }
+  });
+  // --- 进度预填充结束 ---
   try {
     const uploadPromises = chunks.map((chunk, i) => {
+      // --- 跳过已上传的分片 ---
+      if (uploadedChunks.includes(i)) {
+        console.log(`【断点续传】分片 ${i} 已存在，跳过上传。`);
+        return Promise.resolve();
+      }
+      // --- 跳过逻辑结束 ---
+
       const formData = new FormData();
       formData.append('file', chunk);
       formData.append('batchId', batchId);

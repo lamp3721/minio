@@ -71,6 +71,34 @@ public class PrivateFileService {
     }
 
     /**
+     * 获取指定批次已上传成功的所有分片序号。
+     *
+     * @param batchId 本次上传任务的唯一批次ID。
+     * @return 已上传分片的序号列表。
+     * @throws Exception 如果查询时发生错误。
+     */
+    public List<Integer> getUploadedChunkNumbers(String batchId) throws Exception {
+        List<StorageObject> chunks = objectStorageService.listObjects(
+                bucketConfig.getPrivateFiles(),
+                batchId + "/",
+                false // 只查找当前目录，不递归
+        );
+
+        return chunks.stream()
+                .map(StorageObject::getObjectName)
+                .map(name -> {
+                    try {
+                        return Integer.parseInt(name.substring(name.lastIndexOf('/') + 1));
+                    } catch (NumberFormatException e) {
+                        // 忽略无法解析为数字的文件，例如目录本身
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
+    /**
      * 列出私有存储桶中所有最终合并完成的文件。
      * <p>
      * 此方法会通过路径格式过滤掉分片上传过程中产生的临时文件。
