@@ -196,20 +196,20 @@ public class PublicAssetService {
     /**
      * 从公共存储桶中删除一个文件。
      * <p>
-     * 此操作会先删除数据库中的元数据记录，然后再删除对象存储中的文件。
+     * 此操作会先删除对象存储中的文件，然后再删除数据库中的元数据记录。
      *
      * @param objectName 需要删除的文件的对象路径。
      * @throws Exception 如果删除过程中发生错误。
      */
     public void deletePublicFile(String objectName) throws Exception {
-        //从当中解析出hash
+        // 1. 先从 MinIO 删除对象
+        objectStorageService.delete(bucketConfig.getPublicAssets(), objectName);
+
+        // 2. 如果 MinIO 删除成功，再删除数据库元数据
         String hash = FilePathUtil.extractHashFromPath(objectName);
-        //删除元数据
         if (hash != null) {
             fileMetadataRepository.deleteByHash(hash, StorageType.PUBLIC);
         }
-
-        objectStorageService.delete(bucketConfig.getPublicAssets(), objectName);
     }
 
     /**

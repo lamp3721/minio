@@ -251,17 +251,20 @@ public class PrivateFileService {
     /**
      * 删除一个私有文件。
      * <p>
-     * 此操作会先删除数据库中的元数据，然后删除对象存储中的文件。
+     * 此操作会先删除对象存储中的文件，然后删除数据库中的元数据。
      *
      * @param objectName 需要删除的文件的对象路径。
      * @throws Exception 如果删除时出错。
      */
     public void deletePrivateFile(String objectName) throws Exception {
+        // 1. 先从 MinIO 删除对象
+        objectStorageService.delete(bucketConfig.getPrivateFiles(), objectName);
+
+        // 2. 如果 MinIO 删除成功，再删除数据库元数据
         String hash = FilePathUtil.extractHashFromPath(objectName);
         if (hash != null) {
             fileMetadataRepository.deleteByHash(hash, StorageType.PRIVATE);
         }
-        objectStorageService.delete(bucketConfig.getPrivateFiles(), objectName);
     }
 
     /**
