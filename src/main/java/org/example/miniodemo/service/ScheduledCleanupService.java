@@ -1,24 +1,16 @@
 package org.example.miniodemo.service;
 
-import io.minio.MinioClient;
-import io.minio.RemoveObjectsArgs;
-import io.minio.Result;
-import io.minio.messages.DeleteError;
-import io.minio.messages.DeleteObject;
-import io.minio.messages.Item;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.config.MinioBucketConfig;
+import org.example.miniodemo.domain.StorageObject;
+import org.example.miniodemo.service.storage.ObjectStorageService;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import io.minio.ListObjectsArgs;
-import org.springframework.beans.factory.annotation.Qualifier;
 
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 /**
  * 提供定时任务，用于清理系统中的过期临时文件。
@@ -30,11 +22,11 @@ import java.util.stream.StreamSupport;
 @Service
 public class ScheduledCleanupService {
 
-    private final MinioClient minioClient;
+    private final ObjectStorageService objectStorageService;
     private final MinioBucketConfig bucketConfig;
 
-    public ScheduledCleanupService(@Qualifier("internalMinioClient") MinioClient minioClient, MinioBucketConfig bucketConfig) {
-        this.minioClient = minioClient;
+    public ScheduledCleanupService(ObjectStorageService objectStorageService, MinioBucketConfig bucketConfig) {
+        this.objectStorageService = objectStorageService;
         this.bucketConfig = bucketConfig;
     }
 
@@ -60,55 +52,29 @@ public class ScheduledCleanupService {
         
         try {
             // 扫描整个私有存储桶
-            Iterable<Result<Item>> results = minioClient.listObjects(
-                    ListObjectsArgs.builder()
-                            .bucket(bucketConfig.getPrivateFiles())
-                            .recursive(true)
-                            .build());
+            List<StorageObject> allObjects = objectStorageService.listObjects(
+                    bucketConfig.getPrivateFiles(), null, true);
 
-            List<DeleteObject> orphanedObjects = StreamSupport.stream(results.spliterator(), false)
-                    .map(itemResult -> {
-                        try {
-                            return itemResult.get();
-                        } catch (Exception e) {
-                            log.error("在清理任务中获取MinIO对象信息失败", e);
-                            return null;
-                        }
-                    })
+            List<String> orphanedObjectNames = allObjects.stream()
                     .filter(item -> {
                         if (item == null) return false;
-                        try {
-                            // 检查1: 文件是否超过24小时未修改
-                            boolean isOld = item.lastModified().isBefore(threshold);
-                            if (!isOld) return false;
+                        // 检查1: 文件是否超过24小时未修改
+                        boolean isOld = item.getLastModified().isBefore(threshold);
+                        if (!isOld) return false;
 
-                            // 检查2: 文件路径是否不像最终合并的文件路径
-                            // 临时分片路径是 batchId/chunkNum (e.g., "uuid/0"), 不会匹配最终文件路径的正则
-                            boolean isNotFinalFile = !item.objectName().matches("^\\d{4}/\\d{2}/\\d{2}/.+/.+");
-                            
-                            return isNotFinalFile;
-                        } catch (Exception e) {
-                             log.error("检查对象是否为孤儿分片时出错: {}", item.objectName(), e);
-                            return false;
-                        }
+                        // 检查2: 文件路径是否不像最终合并的文件路径
+                        // 临时分片路径是 batchId/chunkNum (e.g., "uuid/0"), 不会匹配最终文件路径的正则
+                        return !item.getObjectName().matches("^\\d{4}/\\d{2}/\\d{2}/.+/.+");
                     })
-                    .map(item -> new DeleteObject(item.objectName()))
+                    .map(StorageObject::getObjectName)
                     .collect(Collectors.toList());
 
-            if (!orphanedObjects.isEmpty()) {
-                log.info("发现 {} 个过期的孤儿分片，准备执行清理...", orphanedObjects.size());
+            if (!orphanedObjectNames.isEmpty()) {
+                log.info("发现 {} 个过期的孤儿分片，准备执行清理...", orphanedObjectNames.size());
                 
-                Iterable<Result<DeleteError>> deleteErrors = minioClient.removeObjects(
-                        RemoveObjectsArgs.builder()
-                                .bucket(bucketConfig.getPrivateFiles())
-                                .objects(orphanedObjects)
-                                .build());
-                
-                for (Result<DeleteError> errorResult : deleteErrors) {
-                    DeleteError error = errorResult.get();
-                    log.error("删除孤儿分片时发生错误. Object: {}, Message: {}", error.objectName(), error.message());
-                }
-                 log.info("孤儿分片清理完成。");
+                objectStorageService.delete(bucketConfig.getPrivateFiles(), orphanedObjectNames);
+
+                log.info("孤儿分片清理完成。");
             } else {
                 log.info("未发现任何需要清理的孤儿分片。");
             }

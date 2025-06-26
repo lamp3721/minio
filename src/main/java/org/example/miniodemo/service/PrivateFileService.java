@@ -1,30 +1,25 @@
 package org.example.miniodemo.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.minio.*;
-import io.minio.http.Method;
-import io.minio.messages.DeleteError;
-import io.minio.messages.DeleteObject;
-import io.minio.messages.Item;
 import io.minio.errors.MinioException;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.config.MinioBucketConfig;
-import org.example.miniodemo.config.MinioConfig;
 import org.example.miniodemo.controller.PrivateFileController;
 import org.example.miniodemo.domain.FileMetadata;
+import org.example.miniodemo.domain.StorageObject;
 import org.example.miniodemo.domain.StorageType;
 import org.example.miniodemo.dto.FileDetailDto;
-import org.springframework.beans.factory.annotation.Qualifier;
+import org.example.miniodemo.service.storage.ObjectStorageService;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.time.LocalDate;
-import java.util.*;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 /**
  * 专用于处理私有文件（Private Files）相关操作的服务层。
@@ -46,22 +41,16 @@ import java.util.stream.StreamSupport;
 @Service
 public class PrivateFileService {
 
-    private final MinioClient internalMinioClient;
-    private final MinioClient publicMinioClient;
+    private final ObjectStorageService objectStorageService;
     private final MinioBucketConfig bucketConfig;
-    private final MinioConfig minioConfig;
-
     private final FileMetadataService fileMetadataService;
 
     public PrivateFileService(
-            @Qualifier("internalMinioClient") MinioClient internalMinioClient,
-            @Qualifier("publicMinioClient") MinioClient publicMinioClient,
+            ObjectStorageService objectStorageService,
             MinioBucketConfig bucketConfig,
-            MinioConfig minioConfig, FileMetadataService fileMetadataService) {
-        this.internalMinioClient = internalMinioClient;
-        this.publicMinioClient = publicMinioClient;
+            FileMetadataService fileMetadataService) {
+        this.objectStorageService = objectStorageService;
         this.bucketConfig = bucketConfig;
-        this.minioConfig = minioConfig;
         this.fileMetadataService = fileMetadataService;
     }
 
@@ -95,43 +84,27 @@ public class PrivateFileService {
      * @return 文件信息DTO列表，每个DTO包含 "name", "path", "size"
      * @throws MinioException 如果发生MinIO相关错误。
      */
-    public List<FileDetailDto> listPrivateFiles() throws MinioException {
+    public List<FileDetailDto> listPrivateFiles() throws Exception {
         try {
-            Iterable<Result<Item>> results = internalMinioClient.listObjects(ListObjectsArgs.builder()
-                    .bucket(bucketConfig.getPrivateFiles())
-                    .recursive(true)
-                    .build());
+            List<StorageObject> results = objectStorageService.listObjects(
+                    bucketConfig.getPrivateFiles(), null, true);
 
-            return StreamSupport.stream(results.spliterator(), false)
-                    .map(itemResult -> {
-                        try {
-                            return itemResult.get();
-                        } catch (Exception e) {
-                            log.error("获取对象信息失败", e);
-                            return null;
-                        }
-                    })
+            return results.stream()
                     .filter(Objects::nonNull)
                     // 使用正则表达式匹配 YYYY/MM/DD/hash/filename 格式的路径
                     // 这样可以精确地只包含最终文件，并排除临时分片（如 batchId/0）和虚拟目录
-                    .filter(item -> item.objectName().matches("^\\d{4}/\\d{2}/\\d{2}/.+/.+"))
+                    .filter(item -> item.getObjectName().matches("^\\d{4}/\\d{2}/\\d{2}/.+/.+"))
                     .map(item -> {
-                        try {
-                            String objectName = item.objectName();
-                            // 从对象路径中提取原始文件名
-                            String originalName = objectName.substring(objectName.lastIndexOf('/') + 1);
+                        String objectName = item.getObjectName();
+                        // 从对象路径中提取原始文件名
+                        String originalName = objectName.substring(objectName.lastIndexOf('/') + 1);
 
-                            return FileDetailDto.builder()
-                                    .name(originalName)
-                                    .path(objectName)
-                                    .size(item.size())
-                                    .build(); // 私有文件不生成URL
-                        } catch (Exception e) {
-                            log.error("解析对象 '{}' 信息失败", item.objectName(), e);
-                            return null;
-                        }
+                        return FileDetailDto.builder()
+                                .name(originalName)
+                                .path(objectName)
+                                .size(item.getSize())
+                                .build(); // 私有文件不生成URL
                     })
-                    .filter(Objects::nonNull)
                     .collect(Collectors.toList());
         } catch (Exception e) {
             log.error("列出私有文件失败", e);
@@ -150,27 +123,15 @@ public class PrivateFileService {
     public void mergeChunks(String batchId, String originalFileName, String fileHash, String contentType, Long fileSize) throws Exception {
         try {
             // 1. 列出该批次的所有分片
-            List<ComposeSource> sources = StreamSupport.stream(
-                            internalMinioClient.listObjects(ListObjectsArgs.builder()
-                                    .bucket(bucketConfig.getPrivateFiles())
-                                    .prefix(batchId + "/") // 分片存储在以batchId为名的虚拟目录下
-                                    .recursive(true)
-                                    .build()).spliterator(), false)
-                    .map(itemResult -> {
-                        try {
-                            Item item = itemResult.get();
-                            return ComposeSource.builder()
-                                    .bucket(bucketConfig.getPrivateFiles())
-                                    .object(item.objectName())
-                                    .build();
-                        } catch (Exception e) {
-                            throw new RuntimeException(e);
-                        }
-                    })
-                    .sorted(Comparator.comparing(s -> Integer.valueOf(s.object().substring(s.object().lastIndexOf('/') + 1))))
+            List<StorageObject> chunks = objectStorageService.listObjects(bucketConfig.getPrivateFiles(), batchId + "/", true);
+
+            List<String> sourceObjectNames = chunks.stream()
+                    .map(StorageObject::getObjectName)
+                    .sorted(Comparator.comparing(s -> Integer.valueOf(s.substring(s.lastIndexOf('/') + 1))))
                     .collect(Collectors.toList());
 
-            if (sources.isEmpty()) {
+
+            if (sourceObjectNames.isEmpty()) {
                 throw new MinioException("找不到任何分片进行合并，批次ID: " + batchId);
             }
 
@@ -182,11 +143,8 @@ public class PrivateFileService {
             String finalObjectName = String.join("/", year, month, day, fileHash, originalFileName);
 
             // 3. 将分片合并成一个新对象
-            internalMinioClient.composeObject(ComposeObjectArgs.builder()
-                    .bucket(bucketConfig.getPrivateFiles())
-                    .object(finalObjectName)
-                    .sources(sources)
-                    .build());
+            objectStorageService.compose(bucketConfig.getPrivateFiles(), sourceObjectNames, finalObjectName);
+
 
             // 5. 记录元信息
             FileMetadata metadata = new FileMetadata();
@@ -200,7 +158,7 @@ public class PrivateFileService {
             fileMetadataService.save(metadata);
 
             log.info("【文件合并 - 私有库】文件合并成功。最终对象路径: '{}'。", finalObjectName);
-            deleteTemporaryChunks(batchId);
+            deleteTemporaryChunks(batchId, sourceObjectNames);
 
         } catch (Exception e) {
             log.error("合并文件失败，批次ID: {}", batchId, e);
@@ -224,12 +182,12 @@ public class PrivateFileService {
     public void uploadChunk(MultipartFile file, String batchId, Integer chunkNumber) throws Exception {
         String objectName = batchId + "/" + chunkNumber;
         try (InputStream inputStream = file.getInputStream()) {
-            internalMinioClient.putObject(
-                    PutObjectArgs.builder()
-                            .bucket(bucketConfig.getPrivateFiles())
-                            .object(objectName)
-                            .stream(inputStream, file.getSize(), -1)
-                            .build()
+            objectStorageService.upload(
+                    bucketConfig.getPrivateFiles(),
+                    objectName,
+                    inputStream,
+                    file.getSize(),
+                    file.getContentType()
             );
         }
     }
@@ -242,13 +200,11 @@ public class PrivateFileService {
      * @throws MinioException 如果生成URL时出错。
      */
     public String getPresignedPrivateDownloadUrl(String objectName) throws Exception {
-        return publicMinioClient.getPresignedObjectUrl(
-                GetPresignedObjectUrlArgs.builder()
-                        .method(Method.GET)
-                        .bucket(bucketConfig.getPrivateFiles())
-                        .object(objectName)
-                        .expiry(15, TimeUnit.MINUTES)
-                        .build()
+        return objectStorageService.getPresignedDownloadUrl(
+                bucketConfig.getPrivateFiles(),
+                objectName,
+                15,
+                TimeUnit.MINUTES
         );
     }
 
@@ -263,8 +219,7 @@ public class PrivateFileService {
      * @throws Exception 如果获取对象时发生错误。
      */
     public InputStream downloadPrivateFile(String objectName) throws Exception {
-        return internalMinioClient.getObject(
-                GetObjectArgs.builder().bucket(bucketConfig.getPrivateFiles()).object(objectName).build());
+        return objectStorageService.download(bucketConfig.getPrivateFiles(), objectName);
     }
 
     /**
@@ -274,48 +229,37 @@ public class PrivateFileService {
      * @throws MinioException 如果删除操作失败。
      */
     public void deletePrivateFile(String objectName) throws Exception {
-        //从当中解析出hash
         String hash = extractHash(objectName);
-        fileMetadataService.remove(new LambdaQueryWrapper<FileMetadata>().eq(FileMetadata::getContentHash, hash).eq(FileMetadata::getStorageType, StorageType.PRIVATE));
-
-        internalMinioClient.removeObject(
-                RemoveObjectArgs.builder().bucket(bucketConfig.getPrivateFiles()).object(objectName).build());
+        if (hash != null) {
+            fileMetadataService.remove(new LambdaQueryWrapper<FileMetadata>()
+                    .eq(FileMetadata::getContentHash, hash)
+                    .eq(FileMetadata::getStorageType, StorageType.PRIVATE));
+        }
+        objectStorageService.delete(bucketConfig.getPrivateFiles(), objectName);
     }
 
-    private void deleteTemporaryChunks(String batchId) {
+    /**
+     * 合并成功后，删除临时分片文件。
+     *
+     * @param batchId 批次ID
+     */
+    private void deleteTemporaryChunks(String batchId, List<String> objectNames) {
         try {
-            List<DeleteObject> toDelete = StreamSupport.stream(internalMinioClient.listObjects(
-                    ListObjectsArgs.builder()
-                            .bucket(bucketConfig.getPrivateFiles())
-                            .prefix(batchId + "/")
-                            .recursive(true)
-                            .build()
-            ).spliterator(), false).map(itemResult -> {
-                try {
-                    return new DeleteObject(itemResult.get().objectName());
-                } catch (Exception e) {
-                    throw new RuntimeException("获取待删除分片列表失败", e);
-                }
-            }).collect(Collectors.toList());
-
-            if (!toDelete.isEmpty()) {
-                Iterable<Result<DeleteError>> results = internalMinioClient.removeObjects(
-                        RemoveObjectsArgs.builder()
-                                .bucket(bucketConfig.getPrivateFiles())
-                                .objects(toDelete)
-                                .build());
-                for (Result<DeleteError> result : results) {
-                    DeleteError error = result.get();
-                    log.error("删除临时分片失败. Object: {}, Message: {}", error.objectName(), error.message());
-                }
-            }
+            objectStorageService.delete(bucketConfig.getPrivateFiles(), objectNames);
+            log.info("成功删除批次 '{}' 的 {} 个临时分片。", batchId, objectNames.size());
         } catch (Exception e) {
-            log.error("删除临时分片失败, batchId: {}", batchId, e);
+            log.error("删除批次 '{}' 的临时分片失败。", batchId, e);
         }
     }
 
-
+    /**
+     * 从对象存储路径中提取文件哈希值。
+     *
+     * @param path 对象存储路径。
+     * @return 提取出的哈希值，如果路径格式不符则返回null。
+     */
     public String extractHash(String path) {
+        if (path == null) return null;
         String[] parts = path.split("/");
         if (parts.length < 2) {
             return null; // 或抛异常，路径格式不对

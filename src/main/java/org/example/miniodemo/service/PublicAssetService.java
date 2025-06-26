@@ -17,25 +17,25 @@ import org.example.miniodemo.config.MinioBucketConfig;
 import org.example.miniodemo.config.MinioConfig;
 import org.example.miniodemo.controller.PublicAssetController;
 import org.example.miniodemo.domain.FileMetadata;
+import org.example.miniodemo.domain.StorageObject;
 import org.example.miniodemo.domain.StorageType;
 import org.example.miniodemo.dto.FileDetailDto;
+import org.example.miniodemo.service.storage.ObjectStorageService;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.time.LocalDate;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
-import java.util.Objects;
 
 /**
  * 专用于处理公共资源（Public Assets）相关操作的服务层。
  * <p>
- * 封装了对MinIO中公开存储桶的操作逻辑，包括列出文件、上传文件和删除文件。
+ * 封装了对公开存储桶的操作逻辑，包括列出文件、上传文件和删除文件。
  * 公开资源意味着这些文件可以通过其直接URL被互联网上的任何人访问。
  *
  * @see PublicAssetController
@@ -44,18 +44,17 @@ import java.util.Objects;
 @Service
 public class PublicAssetService {
 
-    private final MinioClient minioClient;
+    private final ObjectStorageService objectStorageService;
     private final MinioBucketConfig bucketConfig;
     private final MinioConfig minioConfig;
-
     private final FileMetadataService fileMetadataService;
 
     public PublicAssetService(
-            @Qualifier("internalMinioClient") MinioClient minioClient,
+            ObjectStorageService objectStorageService,
             MinioBucketConfig bucketConfig,
             MinioConfig minioConfig,
             FileMetadataService fileMetadataService) {
-        this.minioClient = minioClient;
+        this.objectStorageService = objectStorageService;
         this.bucketConfig = bucketConfig;
         this.minioConfig = minioConfig;
         this.fileMetadataService = fileMetadataService;
@@ -120,33 +119,24 @@ public class PublicAssetService {
      * @throws Exception 如果与MinIO服务器通信时发生错误。
      */
     public List<FileDetailDto> listPublicFiles() throws Exception {
-        Iterable<Result<Item>> results = minioClient.listObjects(
-                ListObjectsArgs.builder().bucket(bucketConfig.getPublicAssets()).recursive(true).build()
-        );
+        List<StorageObject> storageObjects = objectStorageService.listObjects(bucketConfig.getPublicAssets(), null, true);
 
         String baseUrl = minioConfig.getPublicEndpoint() + "/" + bucketConfig.getPublicAssets() + "/";
 
-        return StreamSupport.stream(results.spliterator(), false)
-                .map(itemResult -> {
-                    try {
-                        Item item = itemResult.get();
-                        String objectName = item.objectName();
-
-                        // 从对象路径中提取原始文件名
-                        String originalName = objectName.substring(objectName.lastIndexOf('/') + 1);
-
-                        return FileDetailDto.builder()
-                                .name(originalName)
-                                .path(objectName)
-                                .size(item.size())
-                                .url(baseUrl + objectName)
-                                .build();
-                    } catch (Exception e) {
-                        log.error("获取公共文件 '{}' 信息失败", itemResult.toString(), e);
-                        return null;
-                    }
-                })
+        return storageObjects.stream()
                 .filter(Objects::nonNull)
+                .map(item -> {
+                    String objectName = item.getObjectName();
+                    // 从对象路径中提取原始文件名
+                    String originalName = objectName.substring(objectName.lastIndexOf('/') + 1);
+
+                    return FileDetailDto.builder()
+                            .name(originalName)
+                            .path(objectName)
+                            .size(item.getSize())
+                            .url(baseUrl + objectName)
+                            .build();
+                })
                 .collect(Collectors.toList());
     }
 
@@ -170,16 +160,13 @@ public class PublicAssetService {
         String objectName = String.join("/", year, month, day, fileHash, originalFileName);
 
         try (InputStream inputStream = file.getInputStream()) {
-            minioClient.putObject(
-                    PutObjectArgs.builder()
-                            .bucket(bucketConfig.getPublicAssets())
-                            .object(objectName)
-                            .stream(inputStream, file.getSize(), -1)
-                            .contentType(file.getContentType())
-                            .build()
+            objectStorageService.upload(
+                    bucketConfig.getPublicAssets(),
+                    objectName,
+                    inputStream,
+                    file.getSize(),
+                    file.getContentType()
             );
-
-
             log.info("【文件上传 - 公共库】文件上传成功。对象路径: '{}'。", objectName);
         }
         //保存hash到数据库
@@ -213,12 +200,7 @@ public class PublicAssetService {
         //删除元数据
         fileMetadataService.remove(new LambdaQueryWrapper<FileMetadata>().eq(FileMetadata::getContentHash, hash).eq(FileMetadata::getStorageType, StorageType.PUBLIC));
 
-        minioClient.removeObject(
-                RemoveObjectArgs.builder()
-                        .bucket(bucketConfig.getPublicAssets())
-                        .object(objectName)
-                        .build()
-        );
+        objectStorageService.delete(bucketConfig.getPublicAssets(), objectName);
     }
 
 
