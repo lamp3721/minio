@@ -39,6 +39,7 @@ public class AsyncFileService {
 
         fileMetadataRepository.findByHash(hash, StorageType.PRIVATE).ifPresent(metadata -> {
             metadata.setLastAccessedAt(new java.util.Date());
+            metadata.setVisitCount(metadata.getVisitCount() + 1);
             // 注意：这里我们依然需要一个更新方法
             // 我们将暂时假设 update 方法存在于 repository
             int updatedRows = fileMetadataRepository.update(metadata);

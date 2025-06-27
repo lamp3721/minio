@@ -70,6 +70,11 @@ public class FileMetadata implements Serializable {
      */
     private Date lastAccessedAt;
 
+    /**
+     * 文件被访问的次数
+     */
+    private Integer visitCount;
+
     @TableField(exist = false)
     private static final long serialVersionUID = 1L;
 }
