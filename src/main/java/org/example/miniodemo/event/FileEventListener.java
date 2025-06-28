@@ -6,6 +6,9 @@ import org.example.miniodemo.domain.FileMetadata;
 import org.example.miniodemo.repository.FileMetadataRepository;
 import org.example.miniodemo.service.AsyncFileService;
 import org.springframework.context.event.EventListener;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +35,11 @@ public class FileEventListener {
     @EventListener
     @Transactional
     @Async
+    @Retryable(
+            value = { RuntimeException.class },
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 2000, multiplier = 2)
+    )
     public void onFileMerged(FileMergedEvent event) {
         FileMetadata metadata = event.getFileMetadata();
         log.info("【事件监听 - 元数据】接收到文件合并事件，准备保存元数据。对象: '{}'", metadata.getObjectName());
@@ -39,10 +47,23 @@ public class FileEventListener {
             fileMetadataRepository.save(metadata);
             log.info("【事件监听 - 元数据】元数据保存成功。对象: '{}'", metadata.getObjectName());
         } catch (Exception e) {
-            log.error("【事件监听 - 元数据】保存元数据失败。对象: '{}'，错误: {}", metadata.getObjectName(), e.getMessage(), e);
-            // 抛出异常以确保事务回滚
-            throw new RuntimeException("Failed to save file metadata", e);
+            log.error("【事件监听 - 元数据】保存元数据失败，将进行重试（如果未达最大次数）。对象: '{}'，错误: {}", metadata.getObjectName(), e.getMessage());
+            // 向上抛出异常，以便 @Retryable 能够捕获并触发重试
+            throw new RuntimeException("Failed to save file metadata, triggering retry.", e);
         }
+    }
+
+    /**
+     * 当 @Retryable 方法达到最大重试次数后仍然失败时，将调用此恢复方法。
+     *
+     * @param e     在最后一次重试中抛出的异常。
+     * @param event 原始的事件对象。
+     */
+    @Recover
+    public void recover(RuntimeException e, FileMergedEvent event) {
+        FileMetadata metadata = event.getFileMetadata();
+        log.error("【恢复方法】所有重试次数已用尽，元数据保存最终失败！请关注后续的孤儿文件清理任务。对象: '{}'，最终错误: {}",
+                metadata.getObjectName(), e.getMessage());
     }
 
     /**
