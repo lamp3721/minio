@@ -73,7 +73,6 @@ const loading = ref(false);
 
 // --- 上传器配置 ---
 const uploaderConfig = {
-  storageType: 'private', // 逻辑类型
   apiPrefix: '/private'   // API实现细节
 };
 

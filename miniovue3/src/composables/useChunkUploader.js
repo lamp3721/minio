@@ -13,7 +13,6 @@ const CHUNK_SIZE = 5 * 1024 * 1024;
 /**
  * 一个处理分片上传的 Vue Composable，集成了秒传和断点续传功能。
  * @param {object} uploaderConfig - 上传器配置对象。
- * @param {string} uploaderConfig.storageType - 存储类型， 'private' 或 'public'，用于逻辑判断或日志记录。
  * @param {string} uploaderConfig.apiPrefix - 实际用于API请求的URL前缀。
  * @returns {object} 返回一个包含响应式状态和方法的对象，用于在组件中控制上传过程。
  */

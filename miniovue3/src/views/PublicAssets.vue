@@ -93,7 +93,6 @@ const loading = ref(false);   // 加载状态
 
 // --- 上传器配置 ---
 const uploaderConfig = {
-  storageType: 'public', // 逻辑类型
   apiPrefix: '/public'   // API实现细节
 };
 
