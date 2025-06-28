@@ -129,13 +129,8 @@ public class PublicAssetController {
     @PostMapping("/upload/merge")
     public R<String> mergePublicChunks(@RequestBody MergeRequestDto mergeRequest) {
         try {
-            FileMetadata metadata = publicAssetService.mergeChunks(
-                    mergeRequest.getBatchId(),
-                    mergeRequest.getFileName(),
-                    mergeRequest.getFileHash(),
-                    mergeRequest.getContentType(),
-                    mergeRequest.getFileSize()
-            );
+            FileMetadata metadata = publicAssetService.mergeChunks(mergeRequest);
+            // 返回文件公开URL
             String url = publicAssetService.getPublicUrlFor(metadata.getObjectName());
             return R.success(url);
         } catch (Exception e) {

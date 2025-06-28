@@ -26,6 +26,11 @@ public class FileMetadata implements Serializable {
     private Long id;
 
     /**
+     * 存储“桶下的文件夹路径”，如 user123/images/
+     */
+    private String folderPath;
+
+    /**
      * 文件在存储桶中的完整对象名称/路径
      */
     private String objectName;

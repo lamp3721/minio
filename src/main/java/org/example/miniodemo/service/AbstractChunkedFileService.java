@@ -5,6 +5,7 @@ import org.example.miniodemo.common.util.FilePathUtil;
 import org.example.miniodemo.domain.FileMetadata;
 import org.example.miniodemo.domain.StorageObject;
 import org.example.miniodemo.domain.StorageType;
+import org.example.miniodemo.dto.MergeRequestDto;
 import org.example.miniodemo.repository.FileMetadataRepository;
 import org.example.miniodemo.service.storage.ObjectStorageService;
 import org.springframework.transaction.annotation.Transactional;
@@ -115,21 +116,16 @@ public abstract class AbstractChunkedFileService {
 
     /**
      * 合并分片文件。
-     * @param batchId 分片上传批次ID
-     * @param originalFileName 原始文件名
-     * @param fileHash 文件哈希值
-     * @param contentType 文件内容类型
-     * @param fileSize 文件大小
      * @return 合并后的文件元数据
      * @throws Exception 如果列出、合并或删除分片时发生错误，或分片数量超过MinIO的合并限制。
      */
     @Transactional
-    public FileMetadata mergeChunks(String batchId, String originalFileName, String fileHash, String contentType, Long fileSize) throws Exception {
+    public FileMetadata mergeChunks(MergeRequestDto mergeRequestDto) throws Exception {
         // 1. 列出并排序所有分片
-        List<String> sourceObjectNames = listAndSortChunks(batchId);
+        List<String> sourceObjectNames = listAndSortChunks(mergeRequestDto.getBatchId());
 
         // 2. 构建最终对象路径并合并
-        String finalObjectName = FilePathUtil.buildDateBasedPath(originalFileName, fileHash);
+        String finalObjectName = FilePathUtil.buildDateBasedPath(mergeRequestDto.getFileName(), mergeRequestDto.getFileHash(), mergeRequestDto.getFolderPath());
         try {
             objectStorageService.compose(getBucketName(), sourceObjectNames, finalObjectName);
         } catch (Exception e) {
@@ -138,7 +134,7 @@ public abstract class AbstractChunkedFileService {
         }
 
         // 3. 记录元信息, 如果失败则执行补偿
-        FileMetadata metadata = buildFileMetadata(finalObjectName, originalFileName, fileSize, contentType, fileHash);
+        FileMetadata metadata = buildFileMetadata(mergeRequestDto,finalObjectName);
         try {
             fileMetadataRepository.save(metadata);
         } catch (Exception e) {
@@ -154,7 +150,7 @@ public abstract class AbstractChunkedFileService {
 
         // 4. 异步删除临时分片
         log.info("【文件合并 - {}】文件合并成功，将异步清理临时分片。最终对象路径: '{}'。", getStorageType(), finalObjectName);
-        triggerAsyncChunkCleanup(batchId, sourceObjectNames, getBucketName());
+        triggerAsyncChunkCleanup(mergeRequestDto.getBatchId(), sourceObjectNames, getBucketName());
 
         return metadata;
     }
@@ -188,13 +184,14 @@ public abstract class AbstractChunkedFileService {
      * @param fileHash 文件哈希值
      * @return 文件元数据
      */
-    private FileMetadata buildFileMetadata(String objectName, String originalFileName, Long fileSize, String contentType, String fileHash) {
+    private FileMetadata buildFileMetadata(MergeRequestDto mergeRequestDto,String objectName) {
         FileMetadata metadata = new FileMetadata();
+        metadata.setFolderPath(mergeRequestDto.getFolderPath());
         metadata.setObjectName(objectName);
-        metadata.setOriginalFilename(originalFileName);
-        metadata.setFileSize(fileSize);
-        metadata.setContentType(contentType);
-        metadata.setContentHash(fileHash);
+        metadata.setOriginalFilename(mergeRequestDto.getFileName());
+        metadata.setFileSize(mergeRequestDto.getFileSize());
+        metadata.setContentType(mergeRequestDto.getContentType());
+        metadata.setContentHash(mergeRequestDto.getFileHash());
         metadata.setBucketName(getBucketName());
         metadata.setStorageType(getStorageType());
         return metadata;

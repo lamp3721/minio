@@ -8,6 +8,10 @@ import lombok.Data;
 @Data
 public class MergeRequestDto {
     /**
+     * 文件的存储路径。默认为 "default"。
+     */
+    String folderPath = "default";
+    /**
      * 标识本次上传任务的唯一批次ID。
      */
     private String batchId;

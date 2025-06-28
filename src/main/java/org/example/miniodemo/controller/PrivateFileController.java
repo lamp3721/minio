@@ -135,15 +135,8 @@ public class PrivateFileController {
     @PostMapping("/upload/merge")
     public R<String> mergePrivateChunks(@RequestBody MergeRequestDto mergeRequest) {
         try {
-            privateFileService.mergeChunks(
-                    mergeRequest.getBatchId(),
-                    mergeRequest.getFileName(),
-                    mergeRequest.getFileHash(),
-
-                    mergeRequest.getContentType(),
-                    mergeRequest.getFileSize()
-            );
-
+            // 合并分片
+            privateFileService.mergeChunks(mergeRequest);
             return R.success("文件合并成功: " + mergeRequest.getFileName());
         } catch (Exception e) {
             log.error("文件合并失败: {}", e.getMessage(), e);
