@@ -3,6 +3,7 @@ package org.example.miniodemo.controller;
 import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.common.response.R;
 import org.example.miniodemo.common.response.ResultCode;
+import org.example.miniodemo.common.util.PathValidationUtil;
 import org.example.miniodemo.service.AbstractChunkedFileService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -84,8 +85,12 @@ public abstract class BaseFileController {
     @DeleteMapping("/delete")
     public R<String> deleteFile(@RequestParam("fileName") String fileName) {
         try {
-            getService().deleteFile(fileName);
-            return R.success("文件删除成功: " + fileName);
+            String safeFileName = PathValidationUtil.clean(fileName);
+            getService().deleteFile(safeFileName);
+            return R.success("文件删除成功: " + safeFileName);
+        } catch (IllegalArgumentException e) {
+            log.warn("检测到无效的文件路径: {}", fileName, e);
+            return R.error(ResultCode.BAD_REQUEST, e.getMessage());
         } catch (Exception e) {
             log.error("删除文件失败: {}", e.getMessage(), e);
             return R.error(ResultCode.FILE_DELETE_FAILED, "删除失败: " + e.getMessage());

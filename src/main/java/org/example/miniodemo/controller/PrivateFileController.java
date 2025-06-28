@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.common.response.R;
 import org.example.miniodemo.common.response.ResultCode;
+import org.example.miniodemo.common.util.PathValidationUtil;
 import org.example.miniodemo.dto.CheckRequestDto;
 import org.example.miniodemo.dto.FileDetailDto;
 import org.example.miniodemo.dto.FileExistsDto;
@@ -101,8 +102,12 @@ public class PrivateFileController extends BaseFileController {
     @GetMapping("/download-url")
     public R<String> getPrivatePresignedDownloadUrl(@RequestParam("fileName") String fileName) {
         try {
-            String url = privateFileService.getPresignedPrivateDownloadUrl(fileName);
+            String safeFileName = PathValidationUtil.clean(fileName);
+            String url = privateFileService.getPresignedPrivateDownloadUrl(safeFileName);
             return R.success(url);
+        } catch (IllegalArgumentException e) {
+            log.warn("检测到无效的文件路径: {}", fileName, e);
+            return R.error(ResultCode.BAD_REQUEST, e.getMessage());
         } catch (Exception e) {
             log.error("获取预签名 URL 失败: {}", e.getMessage(), e);
             return R.error(ResultCode.FILE_DOWNLOAD_FAILED, "获取 URL 失败: " + e.getMessage());
@@ -118,8 +123,9 @@ public class PrivateFileController extends BaseFileController {
     @GetMapping("/download")
     public ResponseEntity<Resource> downloadPrivateFile(@RequestParam("fileName") String fileName) {
         try {
-            InputStream inputStream = privateFileService.downloadPrivateFile(fileName);
-            String encodedFileName = URLEncoder.encode(fileName, StandardCharsets.UTF_8).replaceAll("\\+", "%20");
+            String safeFileName = PathValidationUtil.clean(fileName);
+            InputStream inputStream = privateFileService.downloadPrivateFile(safeFileName);
+            String encodedFileName = URLEncoder.encode(safeFileName, StandardCharsets.UTF_8).replaceAll("\\+", "%20");
 
             HttpHeaders headers = new HttpHeaders();
             headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + encodedFileName + "\"");
@@ -129,6 +135,9 @@ public class PrivateFileController extends BaseFileController {
                     .headers(headers)
                     .body(new InputStreamResource(inputStream));
 
+        } catch (IllegalArgumentException e) {
+            log.warn("检测到无效的文件路径: {}", fileName, e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
         } catch (Exception e) {
             log.error("文件下载失败: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
