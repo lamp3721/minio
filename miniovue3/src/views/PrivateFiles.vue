@@ -45,6 +45,7 @@
       <el-table :data="fileList" v-loading="loading" style="width: 100%">
         <el-table-column prop="name" label="文件名" />
         <el-table-column prop="size" label="大小" :formatter="formatFileSize" />
+        <el-table-column prop="visitCount" label="下载次数" />
         <el-table-column label="操作" width="280">
           <template #default="scope">
             <el-button size="small" type="primary" @click="handleDownload(scope.row)">下载</el-button>

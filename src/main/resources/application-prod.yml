@@ -8,7 +8,7 @@ minio:
   # ✅ MinIO 的公网访问地址（前端/用户访问用）
   # 后端在生成文件访问链接（如预览图、下载链接）时使用此地址拼接，返回给前端用户。
   # 前端或用户通过此地址就可以访问 MinIO 上的资源（前提是桶权限允许访问或通过预签名链接）。
-  public-endpoint: http://minio.eeccc.cc
+  public-endpoint: http://192.168.0.7:900
 
   access-key: AsttK4yHDuh2U8pVfyvQ
   secret-key: WNwwyvJ6TzXEe5uFJVjVIAlC6QEtAwzYT7dKNoa0

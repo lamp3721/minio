@@ -76,6 +76,7 @@ public class PrivateFileService extends AbstractChunkedFileService {
                         .path(metadata.getObjectName())
                         .size(metadata.getFileSize())
                         .contentType(metadata.getContentType())
+                        .visitCount(metadata.getVisitCount())
                         .build()) // 私有文件不生成URL
                 .collect(Collectors.toList());
     }

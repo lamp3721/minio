@@ -1,6 +1,6 @@
 minio:
-  endpoint: http://192.168.1.177:9000
-  public-endpoint: http://jenasi.ai:9000
+  endpoint: http://192.168.1.177:900
+  public-endpoint: http://jenasi.ai:900
   access-key: QDWe46Cm2K4UmKewzZck
   secret-key: W4Mrd4GTajP28F8WS06PmGAvUUfKSTPavskCEIdq
 
