@@ -1,7 +1,7 @@
 import { ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import SparkMD5 from 'spark-md5';
-import apiClient from '../api';
+import { storageService } from '../services/storageService';
 
 // --- 常量定义 ---
 /**
@@ -43,12 +43,6 @@ export function useChunkUploader({ storageType }) {
    * @description 计时器的引用，用于在上传结束后清除。
    */
   const uploadTimer = ref(null);
-
-  /**
-   * @type {string}
-   * @description 根据存储类型构建的API请求前缀，例如 "/private" 或 "/public"。
-   */
-  const apiPrefix = `/${storageType}`;
 
   // --- 内部辅助函数 ---
 
@@ -165,7 +159,7 @@ export function useChunkUploader({ storageType }) {
 
     // 步骤 2: 检查文件是否存在（秒传功能）
     try {
-      const checkResult = await apiClient.post(`${apiPrefix}/check`, { fileHash });
+      const checkResult = await storageService.checkFile(storageType, fileHash);
       if (checkResult.exists) {
         uploadProgress.value = { percentage: 100, status: '秒传成功！' };
         ElMessage.success('文件已存在，秒传成功！');
@@ -182,7 +176,7 @@ export function useChunkUploader({ storageType }) {
     // 步骤 3: 检查已上传的分片（断点续传功能）
     let uploadedChunks = [];
     try {
-        uploadedChunks = await apiClient.get(`${apiPrefix}/uploaded/chunks`, { params: { batchId } });
+        uploadedChunks = await storageService.getUploadedChunks(storageType, batchId);
         if (uploadedChunks && uploadedChunks.length > 0) {
             ElMessage.info(`检测到上次上传进度，将从断点处继续上传。`);
         }
@@ -215,16 +209,7 @@ export function useChunkUploader({ storageType }) {
         formData.append('batchId', batchId);
         formData.append('chunkNumber', i);
         
-        const promise = apiClient.post(`${apiPrefix}/upload/chunk`, formData, {
-            onUploadProgress: progressEvent => {
-                // 这个回调并不能很好地处理并发，因此我们只用它来触发全局进度的重新计算
-                // 注意：这里的进度计算是一个简化的估算模型
-                let currentTotalLoaded = initialLoaded;
-                const now = Date.now();
-                const deltaTime = (now - lastTime) / 1000;
-                // 为了简化，我们只在每次有分片完成时才大幅更新进度，瞬时速度在分片完成后计算
-            }
-        }).then(() => {
+        const promise = storageService.uploadChunk(storageType, formData).then(() => {
             uploadedCount++;
             totalLoaded += chunk.size;
             uploadProgress.value = { 
@@ -257,7 +242,7 @@ export function useChunkUploader({ storageType }) {
         fileSize: file.size,
         contentType: file.type
       };
-      await apiClient.post(`${apiPrefix}/upload/merge`, mergeData);
+      await storageService.mergeChunks(storageType, mergeData);
       
       uploadProgress.value.status = '文件上传成功！';
       uploadProgress.value.percentage = 100; // 确保进度条达到100%
