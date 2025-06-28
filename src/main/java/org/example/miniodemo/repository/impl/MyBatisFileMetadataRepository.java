@@ -49,7 +49,7 @@ public class MyBatisFileMetadataRepository implements FileMetadataRepository {
     @Override
     public List<FileMetadata> findAll(StorageType storageType) {
         LambdaQueryWrapper<FileMetadata> queryWrapper = new LambdaQueryWrapper<FileMetadata>()
-                .eq(FileMetadata::getStorageType, storageType);
+                .eq(FileMetadata::getStorageType, storageType).orderByDesc(FileMetadata::getId);
         return fileMetadataMapper.selectList(queryWrapper);
     }
 
