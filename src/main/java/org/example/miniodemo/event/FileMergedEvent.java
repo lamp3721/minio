@@ -28,13 +28,13 @@ public class FileMergedEvent extends ApplicationEvent {
     /**
      * 需要被清理的所有临时分片的对象名称列表。
      */
-    private final List<String> sourceObjectNames;
+    private final List<String> sourceFilePaths;
 
 
     public FileMergedEvent(Object source, FileMetadata fileMetadata, String batchId, List<String> sourceObjectNames) {
         super(source);
         this.fileMetadata = fileMetadata;
         this.batchId = batchId;
-        this.sourceObjectNames = sourceObjectNames;
+        this.sourceFilePaths = sourceObjectNames;
     }
 } 

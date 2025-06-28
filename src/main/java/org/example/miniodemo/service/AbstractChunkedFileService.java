@@ -84,11 +84,11 @@ public abstract class AbstractChunkedFileService {
      * @throws Exception 如果上传分片时发生错误。
      */
     public void uploadChunk(MultipartFile file, String batchId, Integer chunkNumber) throws Exception {
-        String objectName = batchId + "/" + chunkNumber;
+        String filePath = batchId + "/" + chunkNumber;
         try (InputStream inputStream = file.getInputStream()) {
             objectStorageService.upload(
                     getBucketName(),
-                    objectName,
+                    filePath,
                     inputStream,
                     file.getSize(),
                     file.getContentType()
@@ -134,22 +134,22 @@ public abstract class AbstractChunkedFileService {
         List<String> sourceObjectNames = listAndSortChunks(mergeRequestDto.getBatchId());
 
         // 2. 构建最终对象路径并合并
-        String finalObjectName = FilePathUtil.buildDateBasedPath(mergeRequestDto.getFileName(), mergeRequestDto.getFileHash(), mergeRequestDto.getFolderPath());
+        String finalFilePath = FilePathUtil.buildDateBasedPath(mergeRequestDto.getFileName(), mergeRequestDto.getFileHash(), mergeRequestDto.getFolderPath());
         try {
-            objectStorageService.compose(getBucketName(), sourceObjectNames, finalObjectName);
-            log.info("【文件合并 - {}】对象存储操作成功。最终对象: '{}'。", getStorageType(), finalObjectName);
+            objectStorageService.compose(getBucketName(), sourceObjectNames, finalFilePath);
+            log.info("【文件合并 - {}】对象存储操作成功。最终对象: '{}'。", getStorageType(), finalFilePath);
         } catch (Exception e) {
-            log.error("【文件合并 - {}】对象存储操作失败。最终对象: '{}'。", getStorageType(), finalObjectName, e);
+            log.error("【文件合并 - {}】对象存储操作失败。最终对象: '{}'。", getStorageType(), finalFilePath, e);
             throw new Exception("对象存储操作失败", e);
         }
 
         // 3. 构建元数据对象
-        FileMetadata metadata = buildFileMetadata(mergeRequestDto, finalObjectName);
+        FileMetadata metadata = buildFileMetadata(mergeRequestDto, finalFilePath);
 
         // 4. 发布文件合并成功事件
         FileMergedEvent event = new FileMergedEvent(this, metadata, mergeRequestDto.getBatchId(), sourceObjectNames);
         eventPublisher.publish(event);
-        log.info("【文件合并 - {}】文件合并成功事件已发布。最终对象路径: '{}'。", getStorageType(), finalObjectName);
+        log.info("【文件合并 - {}】文件合并成功事件已发布。最终对象路径: '{}'。", getStorageType(), finalFilePath);
 
         return metadata;
     }
@@ -161,19 +161,19 @@ public abstract class AbstractChunkedFileService {
      * @throws Exception 如果删除过程中发生错误。
      */
     @Transactional
-    public void deleteFile(String objectName) throws Exception {
+    public void deleteFile(String filePath) throws Exception {
         // 1. 从对象存储中删除文件
-        objectStorageService.delete(getBucketName(), objectName);
+        objectStorageService.delete(getBucketName(), filePath);
 
         // 2. 从数据库中删除元数据
-        String hash = FilePathUtil.extractHashFromPath(objectName);
+        String hash = FilePathUtil.extractHashFromPath(filePath);
         if (hash != null) {
             fileMetadataRepository.deleteByHash(hash, getStorageType());
             log.info("【文件删除 - {}】成功删除文件元数据，Hash: {}", getStorageType(), hash);
         } else {
-            log.warn("【文件删除 - {}】无法从路径中提取Hash，可能未删除元数据: {}", getStorageType(), objectName);
+            log.warn("【文件删除 - {}】无法从路径中提取Hash，可能未删除元数据: {}", getStorageType(), filePath);
         }
-        log.info("【文件删除 - {}】成功删除对象: {}", getStorageType(), objectName);
+        log.info("【文件删除 - {}】成功删除对象: {}", getStorageType(), filePath);
     }
 
 
@@ -205,10 +205,10 @@ public abstract class AbstractChunkedFileService {
      * @param fileHash 文件哈希值
      * @return 文件元数据
      */
-    private FileMetadata buildFileMetadata(MergeRequestDto mergeRequestDto,String objectName) {
+    private FileMetadata buildFileMetadata(MergeRequestDto mergeRequestDto,String filePath) {
         FileMetadata metadata = new FileMetadata();
         metadata.setFolderPath(mergeRequestDto.getFolderPath());
-        metadata.setFilePath(objectName);
+        metadata.setFilePath(filePath);
         metadata.setOriginalFilename(mergeRequestDto.getFileName());
         metadata.setFileSize(mergeRequestDto.getFileSize());
         metadata.setContentType(mergeRequestDto.getContentType());

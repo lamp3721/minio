@@ -24,7 +24,7 @@ public interface ObjectStorageService {
      * @param contentType 文件的MIME类型。
      * @throws Exception 如果上传失败。
      */
-    void upload(String bucketName, String objectName, InputStream stream, long size, String contentType) throws Exception;
+    void upload(String bucketName, String filePath, InputStream stream, long size, String contentType) throws Exception;
 
     /**
      * 将多个源对象合并成一个目标对象。主要用于分片上传的合并步骤。
@@ -55,7 +55,7 @@ public interface ObjectStorageService {
      * @return 文件的输入流。
      * @throws Exception 如果获取失败。
      */
-    InputStream download(String bucketName, String objectName) throws Exception;
+    InputStream download(String bucketName, String filePath) throws Exception;
 
     /**
      * 删除单个对象。
@@ -64,7 +64,7 @@ public interface ObjectStorageService {
      * @param objectName 对象名称。
      * @throws Exception 如果删除失败。
      */
-    void delete(String bucketName, String objectName) throws Exception;
+    void delete(String bucketName, String filePath) throws Exception;
 
     /**
      * 批量删除多个对象。
@@ -73,7 +73,7 @@ public interface ObjectStorageService {
      * @param objectNames 要删除的对象名称列表。
      * @throws Exception 如果批量删除操作中出现错误。
      */
-    void delete(String bucketName, List<String> objectNames) throws Exception;
+    void delete(String bucketName, List<String> filePaths) throws Exception;
 
     /**
      * 为私有对象生成一个带签名的、有时效的下载URL。
@@ -85,5 +85,5 @@ public interface ObjectStorageService {
      * @return 预签名的下载URL。
      * @throws Exception 如果生成URL失败。
      */
-    String getPresignedDownloadUrl(String bucketName, String objectName, int duration, TimeUnit unit) throws Exception;
+    String getPresignedDownloadUrl(String bucketName, String filePath, int duration, TimeUnit unit) throws Exception;
 } 

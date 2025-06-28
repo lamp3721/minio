@@ -36,11 +36,11 @@ public class MinioObjectStorageService implements ObjectStorageService {
     }
 
     @Override
-    public void upload(String bucketName, String objectName, InputStream stream, long size, String contentType) throws Exception {
+    public void upload(String bucketName, String filePath, InputStream stream, long size, String contentType) throws Exception {
         internalMinioClient.putObject(
                 PutObjectArgs.builder()
                         .bucket(bucketName)
-                        .object(objectName)
+                        .object(filePath)
                         .stream(stream, size, -1)
                         .contentType(contentType)
                         .build()
@@ -90,28 +90,28 @@ public class MinioObjectStorageService implements ObjectStorageService {
     }
 
     @Override
-    public InputStream download(String bucketName, String objectName) throws Exception {
+    public InputStream download(String bucketName, String filePath) throws Exception {
         return internalMinioClient.getObject(
                 GetObjectArgs.builder()
                         .bucket(bucketName)
-                        .object(objectName)
+                        .object(filePath)
                         .build()
         );
     }
 
     @Override
-    public void delete(String bucketName, String objectName) throws Exception {
+    public void delete(String bucketName, String filePath) throws Exception {
         internalMinioClient.removeObject(
                 RemoveObjectArgs.builder()
                         .bucket(bucketName)
-                        .object(objectName)
+                        .object(filePath)
                         .build()
         );
     }
 
     @Override
-    public void delete(String bucketName, List<String> objectNames) throws Exception {
-        List<DeleteObject> toDelete = objectNames.stream()
+    public void delete(String bucketName, List<String> filePaths) throws Exception {
+        List<DeleteObject> toDelete = filePaths.stream()
                 .map(DeleteObject::new)
                 .collect(Collectors.toList());
 
@@ -130,13 +130,13 @@ public class MinioObjectStorageService implements ObjectStorageService {
     }
 
     @Override
-    public String getPresignedDownloadUrl(String bucketName, String objectName, int duration, TimeUnit unit) throws Exception {
+    public String getPresignedDownloadUrl(String bucketName, String filePath, int duration, TimeUnit unit) throws Exception {
         // 预签名URL必须使用面向公网的客户端生成
         return publicMinioClient.getPresignedObjectUrl(
                 GetPresignedObjectUrlArgs.builder()
                         .method(Method.GET)
                         .bucket(bucketName)
-                        .object(objectName)
+                        .object(filePath)
                         .expiry(duration, unit)
                         .build()
         );

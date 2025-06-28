@@ -7,7 +7,6 @@
   >
     <!-- Define the action buttons for each row -->
     <template #actions="{ row, fetchFileList }">
-      {{row}}
       <el-button size="small" type="primary" @click="handleDownload(row)">下载</el-button>
       <el-button size="small" type="success" @click="handleCopyLink(row)">复制链接</el-button>
       <el-button size="small" type="danger" @click="handleDelete(row, fetchFileList)">删除</el-button>

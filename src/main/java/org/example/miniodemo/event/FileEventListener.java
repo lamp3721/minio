@@ -77,6 +77,6 @@ public class FileEventListener {
         String batchId = event.getBatchId();
         String bucketName = event.getFileMetadata().getBucketName();
         log.info("【事件监听 - 清理】接收到文件合并事件，准备异步清理分片。批次ID: '{}', 存储桶: '{}'", batchId, bucketName);
-        asyncFileService.deleteTemporaryChunks(batchId, event.getSourceObjectNames(), bucketName);
+        asyncFileService.deleteTemporaryChunks(batchId, event.getSourceFilePaths(), bucketName);
     }
 } 

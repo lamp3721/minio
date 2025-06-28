@@ -98,9 +98,9 @@ public class PrivateFileService extends AbstractChunkedFileService {
      * @return 文件的输入流。
      * @throws Exception 如果下载时出错。
      */
-    public InputStream downloadPrivateFile(String objectName) throws Exception {
+    public InputStream downloadPrivateFile(String filePath) throws Exception {
         // 异步更新最后访问时间
-        asyncFileService.updateLastAccessedTime(objectName);
-        return objectStorageService.download(getBucketName(), objectName);
+        asyncFileService.updateLastAccessedTime(filePath);
+        return objectStorageService.download(getBucketName(), filePath);
     }
 } 
