@@ -218,19 +218,21 @@ export function useChunkUploader(uploaderConfig) {
 
     // 步骤 5: 所有分片上传完毕，通知服务器合并
     try {
-      uploadProgress.value.status = '所有分片上传完毕，正在通知服务器合并...';
+      uploadProgress.value.status = '正在合并文件...';
       const mergeData = {
         batchId: batchId,
         fileName: file.name,
         fileHash: fileHash,
         fileSize: file.size,
-        contentType: file.type
+        contentType: file.type,
+        folderPath: uploaderConfig.folderPath // 从配置中读取 folderPath
       };
-      await storageService.mergeChunks(uploaderConfig, mergeData);
+      const result = await storageService.mergeChunks(uploaderConfig, mergeData);
       
-      uploadProgress.value.status = '文件上传成功！';
+      let successMessage = '文件上传成功！';
+      uploadProgress.value.status = successMessage;
       uploadProgress.value.percentage = 100; // 确保进度条达到100%
-      ElMessage.success('文件上传成功！');
+      ElMessage.success(successMessage);
       resetUploadState();
       if (onUploadComplete) onUploadComplete();
       return { isSuccess: true, gracefulResetNeeded: true };
