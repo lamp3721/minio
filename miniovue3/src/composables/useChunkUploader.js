@@ -94,9 +94,9 @@ export function useChunkUploader(uploaderConfig) {
   /**
    * 在上传成功后，优雅地重置UI状态（如进度条和文件列表）。
    * @param {import('vue').Ref} uploadRef - Element Plus上传组件的引用。
-   * @param {number} [duration=3000] - 延迟执行的毫秒数。
+   * @param {number} [duration=1500] - 延迟执行的毫秒数。
    */
-   const gracefulReset = (uploadRef, duration = 3000) => {
+   const gracefulReset = (uploadRef, duration = 1500) => {
         setTimeout(() => {
             if (!isUploading.value) { // 再次确认已无上传任务
                 uploadProgress.value = { percentage: 0, status: '' };

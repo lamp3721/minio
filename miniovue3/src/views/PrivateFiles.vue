@@ -27,9 +27,14 @@ const uploaderConfig = {
 
 // --- Action Handlers (specific to this view) ---
 const handleDownload = async (row) => {
-  ElMessage.info('正在生成下载链接...');
+  const loadingMessage = ElMessage.info({
+    message: '正在生成下载链接...',
+    duration: 0,
+  });
   try {
     const url = await apiClient.get('/private/download-url', { params: { fileName: row.path } });
+    loadingMessage.close(); // Immediately close the loading message
+
     const link = document.createElement('a');
     link.href = url;
     link.setAttribute('download', row.name);
@@ -38,17 +43,23 @@ const handleDownload = async (row) => {
     document.body.removeChild(link);
     ElMessage.success('开始下载...');
   } catch (error) {
+    loadingMessage.close(); // Also close on error
     console.error(error); // Interceptor handles user-facing message
   }
 };
 
 const handleCopyLink = async (row) => {
-  ElMessage.info('正在生成下载链接...');
+  const loadingMessage = ElMessage.info({
+    message: '正在生成下载链接...',
+    duration: 0,
+  });
   try {
     const url = await apiClient.get('/private/download-url', { params: { fileName: row.path } });
     await navigator.clipboard.writeText(url);
+    loadingMessage.close(); // Immediately close the loading message
     ElMessage.success('下载链接已复制到剪贴板！');
   } catch (error) {
+    loadingMessage.close(); // Also close on error
     console.error(error); // Interceptor handles user-facing message
   }
 };
