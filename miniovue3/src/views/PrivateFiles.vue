@@ -66,12 +66,13 @@ import SparkMD5 from 'spark-md5';
 import apiClient from '../api';
 import { useChunkUploader } from '../composables/useChunkUploader.js';
 
-// --- Refs and Reactive State ---
+// --- 响应式状态定义 ---
 const uploadRef = ref(null);
 const fileList = ref([]);
 const loading = ref(false);
 
-// --- Use the Composable for Upload Logic ---
+// --- 引入分片上传模块 ---
+// 调用Composable函数，获取所有上传相关的状态和方法
 const {
   isUploading,
   uploadProgress,
@@ -117,54 +118,85 @@ const calculateFileHash = (file) => {
   });
 };
 
-// --- Custom Upload Request for Element Plus ---
+// --- 上传组件钩子 ---
+/**
+ * 自定义Element Plus上传组件的http-request行为。
+ * @param {object} options - Element Plus上传组件传递的参数，包含file对象。
+ */
 const customUploadRequest = async (options) => {
+  // 调用Composable中的核心上传处理函数
   const result = await handleUpload(options.file, fetchFileList);
+  // 如果上传/秒传成功，则延迟重置UI组件的状态
   if (result && result.isSuccess && result.gracefulResetNeeded) {
     gracefulReset(uploadRef);
   }
 };
 
-// --- File Operations ---
+/**
+ * 处理超出上传文件数量限制的钩子。
+ */
+const handleExceed = () => {
+  ElMessage.warning('一次只能上传一个文件，请先移除已有文件。');
+};
+
+// --- 文件操作 (本视图特有) ---
+/**
+ * 从后端获取私有文件列表。
+ */
 const fetchFileList = async () => {
   loading.value = true;
   try {
     fileList.value = await apiClient.get('/private/list');
   } catch (error) {
-    // 拦截器中已处理 ElMessage
+    // 拦截器中已统一处理错误消息
     console.error(error);
   } finally {
     loading.value = false;
   }
 };
 
+/**
+ * 处理文件下载操作。
+ * @param {object} row - 表格中当前行的数据对象。
+ */
 const handleDownload = async (row) => {
   try {
+    // 1. 先从后端获取一个带时效性的预签名URL
     const url = await apiClient.get('/private/download-url', { params: { fileName: row.path } });
+    // 2. 创建一个隐藏的<a>标签来触发浏览器下载
     const link = document.createElement('a');
     link.href = url;
     link.setAttribute('download', row.name);
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+    document.body.removeChild(link); // 下载后移除标签
     ElMessage.success('开始下载...');
   } catch (error) {
-     // 拦截器中已处理 ElMessage
+    // 拦截器中已统一处理错误消息
     console.error(error);
   }
 };
 
+/**
+ * 处理复制预签名下载链接的操作。
+ * @param {object} row - 表格中当前行的数据对象。
+ */
 const handleCopyLink = async (row) => {
   try {
     const url = await apiClient.get('/private/download-url', { params: { fileName: row.path } });
+    // 使用浏览器的剪贴板API
     await navigator.clipboard.writeText(url);
     ElMessage.success('下载链接已复制到剪贴板！');
   } catch (error) {
-     // 拦截器中已处理 ElMessage
+    // 拦截器中已统一处理错误消息
     console.error(error);
   }
 };
 
+/**
+ * 处理文件删除操作。
+ * @param {object} row - 表格中当前行的数据对象。
+ */
 const handleDelete = async (row) => {
   try {
       await ElMessageBox.confirm(`确定要删除文件 "${row.name}" 吗？`, '警告', {
@@ -172,22 +204,27 @@ const handleDelete = async (row) => {
         cancelButtonText: '取消',
         type: 'warning',
       });
+      // 调用后端删除接口
       await apiClient.delete('/private/delete', { params: { fileName: row.path } });
       ElMessage.success('文件删除成功！');
-      fetchFileList();
+      fetchFileList(); // 重新加载文件列表
   } catch (error) {
+    // 如果用户点击了"取消"，则不打印错误
      if (error.message && !error.message.includes('cancel')) {
-       // 拦截器中已处理 ElMessage
+       // 拦截器中已统一处理错误消息
        console.error(error);
     }
   }
 };
 
-const handleExceed = () => {
-  ElMessage.warning('一次只能上传一个文件，请先移除已有文件。');
-};
-
-// --- Utility Functions ---
+// --- 工具函数 ---
+/**
+ * 格式化文件大小，将字节转换为更易读的单位 (KB, MB, GB)。
+ * @param {object} row - 表格行数据。
+ * @param {object} column - 表格列数据。
+ * @param {number} cellValue - 单元格的原始值（文件大小，字节）。
+ * @returns {string} 格式化后的大小字符串。
+ */
 const formatFileSize = (row, column, cellValue) => {
   if (!cellValue) return '';
   const size = parseFloat(cellValue);
@@ -203,9 +240,9 @@ const formatFileSize = (row, column, cellValue) => {
   return size + ' Bytes';
 };
 
-// --- Lifecycle Hooks ---
+// --- Vue生命周期钩子 ---
 onMounted(() => {
-  fetchFileList();
+  fetchFileList(); // 组件挂载后，自动获取一次文件列表
 });
 </script>
 

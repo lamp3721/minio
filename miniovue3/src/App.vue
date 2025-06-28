@@ -23,7 +23,7 @@ import { useRoute } from 'vue-router';
 const route = useRoute();
 const activeIndex = ref(route.path);
 
-// 监听路由变化，以确保导航菜单的高亮状态能正确更新
+// 监听路由变化，以确保导航菜单的高亮状态能够正确地同步更新
 watch(() => route.path, (newPath) => {
   activeIndex.value = newPath;
 });
@@ -54,10 +54,13 @@ body {
 .content-container {
   flex-grow: 1;
   padding: 20px;
-  overflow-y: auto; /* 如果内容超长，则显示滚动条 */
+  overflow-y: auto; /* 如果页面内容超出视口高度，则显示垂直滚动条 */
 }
 
-/* 一些通用的卡片和头部样式，可以被子页面继承 */
+/* 
+  定义一些通用的卡片和头部样式，这些样式可以被子页面（视图组件）继承或复用，
+  以保持整体UI风格的一致性。
+*/
 .box-card {
   margin-bottom: 20px;
 }

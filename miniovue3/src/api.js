@@ -10,7 +10,7 @@ const apiClient = axios.create({
 // 添加响应拦截器
 apiClient.interceptors.response.use(
   response => {
-    // 后端统一响应格式 { code, message, data }
+    // 后端统一响应格式为 { code, message, data }
     const res = response.data;
     if (res.code !== 200) {
       ElMessage({
@@ -18,19 +18,19 @@ apiClient.interceptors.response.use(
         type: 'error',
         duration: 5 * 1000
       });
-      // 可以根据业务需要，返回一个被拒绝的 Promise
+      // 返回一个被拒绝的 Promise，中断后续的 .then() 操作
       return Promise.reject(new Error(res.message || 'Error'));
     } else {
-      // 如果 code 为 200，则返回 data 部分
+      // 如果 code 为 200，则直接返回核心数据 data 部分
       return res.data;
     }
   },
   error => {
-    // 处理网络错误等
-    console.error('API Error: ' + error); // for debug
+    // 处理网络层面的错误
+    console.error('API 请求错误: ' + error); // 用于调试
     if (error.response) {
       // 请求已发出，但服务器响应的状态码不在 2xx 范围内
-      // 特别处理文件下载失败的情况，它可能没有标准json返回体
+      // 特别处理文件下载失败的情况，因为它可能没有标准的JSON返回体
        if (error.response.request?.responseType === 'blob') {
          ElMessage({ message: '文件下载失败或文件不存在', type: 'error', duration: 5 * 1000 });
          return Promise.reject(error);

@@ -5,7 +5,7 @@ import PublicAssets from '../views/PublicAssets.vue';
 const routes = [
   {
     path: '/',
-    redirect: '/private', // 默认重定向到私有文件页面
+    redirect: '/private', // 设置默认重定向，访问根路径时自动跳转到私有文件页面
   },
   {
     path: '/private',
@@ -20,7 +20,7 @@ const routes = [
 ];
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(), // 使用 HTML5 History 模式，路径更美观
   routes,
 });
 

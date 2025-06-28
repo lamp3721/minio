@@ -86,11 +86,13 @@ import { Document, Picture } from '@element-plus/icons-vue';
 import apiClient from '../api';
 import { useChunkUploader } from '../composables/useChunkUploader.js';
 
+// --- 响应式状态定义 ---
 const uploadRef = ref(null);
 const fileList = ref([]);
 const loading = ref(false);
 
-// --- Use the Composable for Upload Logic ---
+// --- 引入分片上传模块 ---
+// 调用Composable函数，获取所有上传相关的状态和方法
 const {
   isUploading,
   uploadProgress,
@@ -100,7 +102,11 @@ const {
   gracefulReset,
 } = useChunkUploader({ storageType: 'public' });
 
-// --- Custom Upload Request for Element Plus ---
+// --- 上传组件钩子 ---
+/**
+ * 自定义Element Plus上传组件的http-request行为。
+ * @param {object} options - Element Plus上传组件传递的参数，包含file对象。
+ */
 const customUploadRequest = async (options) => {
   const result = await handleUpload(options.file, fetchFileList);
   if (result && result.isSuccess && result.gracefulResetNeeded) {
@@ -108,19 +114,38 @@ const customUploadRequest = async (options) => {
   }
 };
 
+/**
+ * 处理超出上传文件数量限制的钩子。
+ */
+const handleExceed = () => {
+  ElMessage.warning('一次只能上传一个文件，请先移除已有文件。');
+};
+
+// --- 计算属性 (用于UI展示) ---
+/**
+ * 计算一个仅包含图片URL的数组，用于Element Plus图片预览组件。
+ * @returns {string[]} 图片URL列表。
+ */
 const imagePreviewList = computed(() => {
   return fileList.value
       .filter(file => file.contentType && file.contentType.startsWith('image/'))
       .map(file => file.url);
 });
 
-// 为图片文件添加在预览列表中的索引，方便预览时定位
+/**
+ * 为文件列表中的每个图片文件计算其在预览列表中的索引。
+ * 这是实现点击小图能在大图预览中正确定位所必需的。
+ * @returns {object[]} 带有 previewIndex 字段的文件列表。
+ */
 const fileListWithPreviewIndex = computed(() => {
+  // 先筛选出所有图片
   const images = fileList.value.filter(file => file.contentType && file.contentType.startsWith('image/'));
+  // 为原列表的每一项进行映射
   return fileList.value.map(file => {
     if (file.contentType && file.contentType.startsWith('image/')) {
       return {
         ...file,
+        // 找到当前图片在纯图片数组中的位置
         previewIndex: images.findIndex(img => img.url === file.url)
       };
     }
@@ -128,6 +153,10 @@ const fileListWithPreviewIndex = computed(() => {
   });
 });
 
+// --- 文件操作 (本视图特有) ---
+/**
+ * 从后端获取公共文件列表。
+ */
 const fetchFileList = async () => {
   loading.value = true;
   try {
@@ -139,6 +168,10 @@ const fetchFileList = async () => {
   }
 };
 
+/**
+ * 处理复制公开访问链接的操作。
+ * @param {object} row - 表格中当前行的数据对象。
+ */
 const handleCopyPublicLink = async (row) => {
   try {
     await navigator.clipboard.writeText(row.url);
@@ -148,6 +181,10 @@ const handleCopyPublicLink = async (row) => {
   }
 };
 
+/**
+ * 处理文件删除操作。
+ * @param {object} row - 表格中当前行的数据对象。
+ */
 const handleDelete = async (row) => {
   try {
     await ElMessageBox.confirm(`确定要删除文件 "${row.name}" 吗？`, '警告', {
@@ -165,10 +202,14 @@ const handleDelete = async (row) => {
   }
 };
 
-const handleExceed = () => {
-  ElMessage.warning('一次只能上传一个文件，请先移除已有文件。');
-};
-
+// --- 工具函数 ---
+/**
+ * 格式化文件大小，将字节转换为更易读的单位 (KB, MB, GB)。
+ * @param {object} row - 表格行数据。
+ * @param {object} column - 表格列数据。
+ * @param {number} cellValue - 单元格的原始值（文件大小，字节）。
+ * @returns {string} 格式化后的大小字符串。
+ */
 const formatFileSize = (row, column, cellValue) => {
   if (!cellValue) return '';
   const size = parseFloat(cellValue);
@@ -184,8 +225,9 @@ const formatFileSize = (row, column, cellValue) => {
   return size + ' Bytes';
 };
 
+// --- Vue生命周期钩子 ---
 onMounted(() => {
-  fetchFileList();
+  fetchFileList(); // 组件挂载后，自动获取一次文件列表
 });
 </script>
 
