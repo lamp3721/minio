@@ -1,11 +1,11 @@
 spring:
   profiles:
-    active: dev # dev, prod
+    active: prod # dev, prod
 
 minio:
   url-expiry-minutes: 15 # 新增：预签名URL过期时间（分钟）
   chunk-cleanup-hours: 24 # 新增：孤儿分片清理阈值（小时）
-  cleanup-cron: "0 0 2 * * ?"
+  cleanup-cron: "0 0 * * * ?"
   bucket:
     private-files: "private-files"
     public-assets: "public-assets"

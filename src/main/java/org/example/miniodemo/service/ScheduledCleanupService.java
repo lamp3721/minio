@@ -34,7 +34,7 @@ public class ScheduledCleanupService {
      * <p>
      * 此任务每一小时执行一次。
      */
-    @Scheduled(cron = "0 0 * * * ?") // 每小时执行一次
+    @Scheduled(cron = "${minio.cleanup-cron}") // 每小时执行一次
     public void cleanupOrphanMinioFiles() {
         log.info("【定时任务】开始执行MinIO孤儿文件清理任务...");
         Map<String, StorageType> bucketsToScan = Map.of(
