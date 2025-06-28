@@ -311,6 +311,7 @@ const handleUpload = async (options) => {
       batchId: batchId,
       fileName: file.name,
       fileHash: fileHash,
+      folderPath: import.meta.env.VITE_Folder_Path,
 
       //这连个数据不影响合共，只是用于在数据库中记录信息
       fileSize: file.size,

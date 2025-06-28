@@ -297,6 +297,8 @@ const handleUpload = async (options) => {
       batchId,
       fileName: file.name,
       fileHash,
+      folderPath:import.meta.env.VITE_Folder_Path,
+
       fileSize: file.size,
       contentType: file.type,
     });
