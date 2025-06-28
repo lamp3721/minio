@@ -12,36 +12,27 @@ const CHUNK_SIZE = 5 * 1024 * 1024;
 
 /**
  * 一个处理分片上传的 Vue Composable，集成了秒传和断点续传功能。
- * @param {object} options - 配置对象。
- * @param {string} options.storageType - 存储类型， 'private' 或 'public'，用于决定API请求的前缀。
+ * @param {object} uploaderConfig - 上传器配置对象。
+ * @param {string} uploaderConfig.storageType - 存储类型， 'private' 或 'public'，用于逻辑判断或日志记录。
+ * @param {string} uploaderConfig.apiPrefix - 实际用于API请求的URL前缀。
  * @returns {object} 返回一个包含响应式状态和方法的对象，用于在组件中控制上传过程。
  */
-export function useChunkUploader({ storageType }) {
+export function useChunkUploader(uploaderConfig) {
   // --- 响应式状态定义 ---
-  /**
-   * @type {import('vue').Ref<boolean>}
-   * @description 标记当前是否有文件正在上传。
-   */
+
+   //标记当前是否有文件正在上传。
   const isUploading = ref(false);
-  /**
-   * @type {import('vue').Ref<{percentage: number, status: string}>}
-   * @description 上传进度对象，用于驱动UI中的进度条和状态文本。
-   */
+
+   // 上传进度对象，用于驱动UI中的进度条和状态文本。
   const uploadProgress = ref({ percentage: 0, status: '' });
-  /**
-   * @type {import('vue').Ref<string>}
-   * @description 实时上传速度。
-   */
+
+   // 实时上传速度。
   const uploadSpeed = ref('');
-  /**
-   * @type {import('vue').Ref<string>}
-   * @description 上传已耗时。
-   */
+
+   // 上传已耗时。
   const elapsedTime = ref('00:00');
-  /**
-   * @type {import('vue').Ref<NodeJS.Timeout|null>}
-   * @description 计时器的引用，用于在上传结束后清除。
-   */
+
+   // 计时器的引用，用于在上传结束后清除。
   const uploadTimer = ref(null);
 
   // --- 内部辅助函数 ---
@@ -159,7 +150,7 @@ export function useChunkUploader({ storageType }) {
 
     // 步骤 2: 检查文件是否存在（秒传功能）
     try {
-      const checkResult = await storageService.checkFile(storageType, fileHash);
+      const checkResult = await storageService.checkFile(uploaderConfig, fileHash);
       if (checkResult.exists) {
         uploadProgress.value = { percentage: 100, status: '秒传成功！' };
         ElMessage.success('文件已存在，秒传成功！');
@@ -176,7 +167,7 @@ export function useChunkUploader({ storageType }) {
     // 步骤 3: 检查已上传的分片（断点续传功能）
     let uploadedChunks = [];
     try {
-        uploadedChunks = await storageService.getUploadedChunks(storageType, batchId);
+        uploadedChunks = await storageService.getUploadedChunks(uploaderConfig, batchId);
         if (uploadedChunks && uploadedChunks.length > 0) {
             ElMessage.info(`检测到上次上传进度，将从断点处继续上传。`);
         }
@@ -209,7 +200,7 @@ export function useChunkUploader({ storageType }) {
         formData.append('batchId', batchId);
         formData.append('chunkNumber', i);
         
-        const promise = storageService.uploadChunk(storageType, formData).then(() => {
+        const promise = storageService.uploadChunk(uploaderConfig, formData).then(() => {
             uploadedCount++;
             totalLoaded += chunk.size;
             uploadProgress.value = { 
@@ -242,7 +233,7 @@ export function useChunkUploader({ storageType }) {
         fileSize: file.size,
         contentType: file.type
       };
-      await storageService.mergeChunks(storageType, mergeData);
+      await storageService.mergeChunks(uploaderConfig, mergeData);
       
       uploadProgress.value.status = '文件上传成功！';
       uploadProgress.value.percentage = 100; // 确保进度条达到100%

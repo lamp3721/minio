@@ -71,8 +71,14 @@ const uploadRef = ref(null);
 const fileList = ref([]);
 const loading = ref(false);
 
+// --- 上传器配置 ---
+const uploaderConfig = {
+  storageType: 'private', // 逻辑类型
+  apiPrefix: '/private'   // API实现细节
+};
+
 // --- 引入分片上传模块 ---
-// 调用Composable函数，获取所有上传相关的状态和方法
+// 调用Composable函数，并传入详细的配置对象
 const {
   isUploading,
   uploadProgress,
@@ -80,7 +86,7 @@ const {
   elapsedTime,
   handleUpload,
   gracefulReset,
-} = useChunkUploader({ storageType: 'private' });
+} = useChunkUploader(uploaderConfig);
 
 // --- Constants ---
 const CHUNK_SIZE = 5 * 1024 * 1024;
