@@ -8,7 +8,7 @@
       </template>
       <el-upload
           ref="uploadRef"
-          :http-request="handleUpload"
+          :http-request="customUploadRequest"
           :on-exceed="handleExceed"
           :limit="1"
           :auto-upload="true"
@@ -83,17 +83,30 @@
 import { ref, onMounted, computed } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Document, Picture } from '@element-plus/icons-vue';
-import SparkMD5 from 'spark-md5';
 import apiClient from '../api';
+import { useChunkUploader } from '../composables/useChunkUploader.js';
 
 const uploadRef = ref(null);
 const fileList = ref([]);
 const loading = ref(false);
-const uploadProgress = ref({ percentage: 0, status: '' });
-const uploadSpeed = ref('');
-const isUploading = ref(false);
-const elapsedTime = ref('');
-const uploadTimer = ref(null);
+
+// --- Use the Composable for Upload Logic ---
+const {
+  isUploading,
+  uploadProgress,
+  uploadSpeed,
+  elapsedTime,
+  handleUpload,
+  gracefulReset,
+} = useChunkUploader({ storageType: 'public' });
+
+// --- Custom Upload Request for Element Plus ---
+const customUploadRequest = async (options) => {
+  const result = await handleUpload(options.file, fetchFileList);
+  if (result && result.isSuccess && result.gracefulResetNeeded) {
+    gracefulReset(uploadRef);
+  }
+};
 
 const imagePreviewList = computed(() => {
   return fileList.value
@@ -114,36 +127,6 @@ const fileListWithPreviewIndex = computed(() => {
     return file;
   });
 });
-
-const CHUNK_SIZE = 5 * 1024 * 1024;
-
-const calculateFileHash = (file) => {
-  return new Promise((resolve, reject) => {
-    const spark = new SparkMD5.ArrayBuffer();
-    const fileReader = new FileReader();
-    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    let currentChunk = 0;
-
-    fileReader.onload = (e) => {
-      spark.append(e.target.result);
-      currentChunk++;
-      if (currentChunk < totalChunks) {
-        loadNext();
-      } else {
-        const hash = spark.end();
-        resolve(hash);
-      }
-    };
-    fileReader.onerror = () => reject('文件读取失败');
-
-    function loadNext() {
-      const start = currentChunk * CHUNK_SIZE;
-      const end = Math.min(start + CHUNK_SIZE, file.size);
-      fileReader.readAsArrayBuffer(file.slice(start, end));
-    }
-    loadNext();
-  });
-};
 
 const fetchFileList = async () => {
   loading.value = true;
@@ -182,166 +165,28 @@ const handleDelete = async (row) => {
   }
 };
 
-const handleUpload = async (options) => {
-  const file = options.file;
-  if (isUploading.value) {
-    ElMessage.warning('已有文件正在上传中，请稍后再试。');
-    return;
-  }
-  isUploading.value = true;
-  uploadProgress.value = { percentage: 0, status: '正在计算文件Hash...' };
-
-  let fileHash;
-  try {
-    fileHash = await calculateFileHash(file);
-    uploadProgress.value.status = `文件Hash: ${fileHash}`;
-  } catch (e) {
-    ElMessage.error(e);
-    isUploading.value = false;
-    return;
-  }
-
-  const batchId = fileHash;
-  try {
-    const checkResult = await apiClient.post('/public/check', { fileHash });
-    if (checkResult.exists) {
-      ElMessage.success('文件已存在，秒传成功！');
-      uploadProgress.value = { percentage: 100, status: '秒传成功！' };
-      await fetchFileList();
-      isUploading.value = false;
-      setTimeout(() => {
-        if (!isUploading.value) {
-          uploadProgress.value = { percentage: 0, status: '' };
-          if (uploadRef.value) uploadRef.value.clearFiles();
-        }
-      }, 3000);
-      return;
-    }
-  } catch (e) {
-    isUploading.value = false;
-    return;
-  }
-
-  let uploadedChunks = [];
-  try {
-    uploadedChunks = await apiClient.get('/public/uploaded/chunks', { params: { batchId } });
-    if (uploadedChunks && uploadedChunks.length > 0) {
-      ElMessage.info(`检测到上次上传进度，将从断点处继续上传。`);
-    }
-  } catch (e) {
-    ElMessage.warning('检查断点失败，将从头开始上传。');
-  }
-
-  const chunkCount = Math.ceil(file.size / CHUNK_SIZE);
-  const chunks = Array.from({ length: chunkCount }, (v, i) =>
-      file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE)
-  );
-
-  const initialLoaded = uploadedChunks.reduce((acc, chunkIndex) => {
-    if (chunkIndex < chunks.length) {
-      return acc + chunks[chunkIndex].size;
-    }
-    return acc;
-  }, 0);
-
-  uploadProgress.value = { percentage: Math.floor((initialLoaded / file.size) * 100), status: '准备上传...' };
-  uploadSpeed.value = '';
-  elapsedTime.value = '00:00';
-  let lastLoaded = initialLoaded;
-  let lastTime = Date.now();
-  const startTime = lastTime;
-  let totalLoaded = initialLoaded;
-  uploadTimer.value = setInterval(() => {
-    const seconds = Math.floor((Date.now() - startTime) / 1000);
-    elapsedTime.value = formatDuration(seconds);
-  }, 1000);
-
-  const chunkProgress = new Array(chunkCount).fill(0);
-  uploadedChunks.forEach(chunkIndex => {
-    if (chunkIndex < chunks.length) {
-      chunkProgress[chunkIndex] = chunks[chunkIndex].size;
-    }
-  });
-
-  try {
-    const uploadPromises = chunks.map((chunk, i) => {
-      if (uploadedChunks.includes(i)) {
-        return Promise.resolve();
-      }
-      const formData = new FormData();
-      formData.append('file', chunk);
-      formData.append('batchId', batchId);
-      formData.append('chunkNumber', String(i));
-      return apiClient.post('/public/upload/chunk', formData, {
-        onUploadProgress: (progressEvent) => {
-          chunkProgress[i] = progressEvent.loaded;
-          totalLoaded = chunkProgress.reduce((acc, cur) => acc + cur, 0);
-          const currentTime = Date.now();
-          const deltaTime = (currentTime - lastTime) / 1000;
-          if (deltaTime > 0.5) {
-            const deltaLoaded = totalLoaded - lastLoaded;
-            uploadSpeed.value = `${(deltaLoaded / deltaTime / 1024 / 1024).toFixed(2)} MB/s`;
-            lastLoaded = totalLoaded;
-            lastTime = currentTime;
-          }
-          uploadProgress.value.percentage = Math.floor((totalLoaded / file.size) * 100);
-          uploadProgress.value.status = `正在上传... ${uploadProgress.value.percentage}%`;
-        },
-      });
-    });
-
-    await Promise.all(uploadPromises);
-
-    uploadProgress.value.status = '正在合并文件...';
-    await apiClient.post('/public/upload/merge', {
-      batchId,
-      fileName: file.name,
-      fileHash,
-      folderPath:import.meta.env.VITE_Folder_Path,
-
-      fileSize: file.size,
-      contentType: file.type,
-    });
-
-    uploadProgress.value = { percentage: 100, status: '文件上传成功！' };
-    ElMessage.success('文件上传成功！');
-    await fetchFileList();
-
-  } catch (error) {
-    uploadProgress.value.status = '上传失败，请检查网络或联系管理员。';
-    console.error('上传或合并失败:', error);
-  } finally {
-    isUploading.value = false;
-    clearInterval(uploadTimer.value);
-    uploadSpeed.value = '';
-    setTimeout(() => {
-      if (!isUploading.value) {
-        uploadProgress.value = { percentage: 0, status: '' };
-        if (uploadRef.value) uploadRef.value.clearFiles();
-      }
-    }, 5000);
-  }
+const handleExceed = () => {
+  ElMessage.warning('一次只能上传一个文件，请先移除已有文件。');
 };
-
-const handleExceed = () => ElMessage.warning('一次只能上传一个文件。');
 
 const formatFileSize = (row, column, cellValue) => {
-  if (cellValue === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(cellValue) / Math.log(k));
-  return `${parseFloat((cellValue / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+  if (!cellValue) return '';
+  const size = parseFloat(cellValue);
+  if (size > 1024 * 1024 * 1024) {
+    return (size / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+  }
+  if (size > 1024 * 1024) {
+    return (size / (1024 * 1024)).toFixed(2) + ' MB';
+  }
+  if (size > 1024) {
+    return (size / 1024).toFixed(2) + ' KB';
+  }
+  return size + ' Bytes';
 };
 
-const formatDuration = (totalSeconds) => {
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = Math.floor(totalSeconds % 60);
-  const padded = (num) => num.toString().padStart(2, '0');
-  return hours > 0 ? `${padded(hours)}:${padded(minutes)}:${padded(seconds)}` : `${padded(minutes)}:${padded(seconds)}`;
-};
-
-onMounted(fetchFileList);
+onMounted(() => {
+  fetchFileList();
+});
 </script>
 
 <style scoped>
