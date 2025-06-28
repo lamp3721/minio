@@ -6,6 +6,7 @@ import org.example.miniodemo.domain.FileMetadata;
 import org.example.miniodemo.repository.FileMetadataRepository;
 import org.example.miniodemo.service.AsyncFileService;
 import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +31,7 @@ public class FileEventListener {
      */
     @EventListener
     @Transactional
+    @Async
     public void onFileMerged(FileMergedEvent event) {
         FileMetadata metadata = event.getFileMetadata();
         log.info("【事件监听 - 元数据】接收到文件合并事件，准备保存元数据。对象: '{}'", metadata.getObjectName());
@@ -49,6 +51,7 @@ public class FileEventListener {
      * @param event 文件合并成功事件。
      */
     @EventListener
+    @Async
     public void onFileMergedCleanup(FileMergedEvent event) {
         String batchId = event.getBatchId();
         String bucketName = event.getFileMetadata().getBucketName();
