@@ -18,36 +18,21 @@ const CHUNK_SIZE = 5 * 1024 * 1024;
  */
 export function useChunkUploader(uploaderConfig) {
   // --- 响应式状态定义 ---
-  /**
-   * 标记当前是否有文件正在上传，用于禁用上传按钮等UI交互。
-   * @type {import('vue').Ref<boolean>}
-   */
+
+  // 标记当前是否有文件正在上传，用于禁用上传按钮等UI交互。
   const isUploading = ref(false);
-  /**
-   * 上传进度对象，直接驱动UI中的进度条和状态文本。
-   * @type {import('vue').Ref<{percentage: number, status: string}>}
-   */
+
+  // 上传进度对象，直接驱动UI中的进度条和状态文本。
   const uploadProgress = ref({ percentage: 0, status: '' });
-  /**
-   * 实时上传速度字符串，例如 "2.5 MB/s"。
-   * @type {import('vue').Ref<string>}
-   */
+
+  // 实时上传速度字符串，例如 "2.5 MB/s"。
   const uploadSpeed = ref('');
-  /**
-   * 上传已耗时的时间字符串，格式为 "mm:ss"。
-   * @type {import('vue').Ref<string>}
-   */
+
+  // 上传已耗时的时间字符串，格式为 "mm:ss"。
   const elapsedTime = ref('00:00');
-  /**
-   * 计时器的引用，用于在上传开始时启动，在结束或失败时清除。
-   * @type {import('vue').Ref<number|null>}
-   */
+
+  // 计时器的引用，用于在上传开始时启动，在结束或失败时清除。
   const uploadTimer = ref(null);
-  /**
-   * 提供已上传大小和总大小的详细文本，例如 "14.5 MB / 20.0 MB"。
-   * @type {import('vue').Ref<string>}
-   */
-  const uploadSizeDetails = ref('');
 
   // --- 内部辅助函数 ---
 
@@ -83,9 +68,7 @@ export function useChunkUploader(uploaderConfig) {
     });
   };
 
-  /**
-   * 启动一个计时器，用于更新上传耗时。
-   */
+  //启动一个计时器，用于更新上传耗时。
   const startTimer = () => {
     let seconds = 0;
     uploadTimer.value = setInterval(() => {
@@ -96,17 +79,13 @@ export function useChunkUploader(uploaderConfig) {
     }, 1000);
   };
 
-  /**
-   * 停止并清除计时器。
-   */
+  // 停止并清除计时器。
   const stopTimer = () => {
     clearInterval(uploadTimer.value);
     uploadTimer.value = null;
   };
-  
-  /**
-   * 重置上传状态，通常在上传失败或取消时调用。
-   */
+
+  // 重置上传状态，通常在上传失败或取消时调用。
   const resetUploadState = () => {
     isUploading.value = false;
     stopTimer();
@@ -145,7 +124,6 @@ export function useChunkUploader(uploaderConfig) {
     // 步骤 0: 初始化状态
     isUploading.value = true;
     uploadProgress.value = { percentage: 0, status: '正在计算文件哈希...' };
-    uploadSizeDetails.value = ''; // 开始时清空
     elapsedTime.value = '00:00';
     uploadSpeed.value = '';
     
@@ -270,7 +248,6 @@ export function useChunkUploader(uploaderConfig) {
     uploadProgress,
     uploadSpeed,
     elapsedTime,
-    uploadSizeDetails,
     handleUpload,
     gracefulReset
   };
