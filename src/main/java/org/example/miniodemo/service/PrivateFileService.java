@@ -94,7 +94,7 @@ public class PrivateFileService extends AbstractChunkedFileService {
     /**
      * 获取用于代理下载的私有文件输入流。
      *
-     * @param objectName 文件的对象路径。
+     * @param filePath 文件的对象路径。
      * @return 文件的输入流。
      * @throws Exception 如果下载时出错。
      */

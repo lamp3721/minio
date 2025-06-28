@@ -27,7 +27,7 @@ public class AsyncFileService {
      * 使用 @Async 注解，此方法将在独立的线程中执行，
      * 不会阻塞主调用线程（如文件下载请求）。
      *
-     * @param objectName 文件的对象路径。
+     * @param filePath 文件的对象路径。
      */
     @Async
     public void updateLastAccessedTime(String filePath) {
@@ -55,7 +55,7 @@ public class AsyncFileService {
     /**
      * 异步删除公共存储桶中的临时分片文件。
      * @param batchId 批次ID，主要用于日志记录。
-     * @param objectNames 要删除的分片对象路径列表。
+     * @param filePaths 要删除的分片对象路径列表。
      * @param bucketName 存储桶名称。
      */
     @Async

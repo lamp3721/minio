@@ -18,7 +18,7 @@ public interface ObjectStorageService {
      * 上传一个对象。
      *
      * @param bucketName  存储桶名称。
-     * @param objectName  对象的完整路径和名称。
+     * @param filePath  对象的完整路径和名称。
      * @param stream      文件的输入流。
      * @param size        文件大小。
      * @param contentType 文件的MIME类型。
@@ -51,7 +51,7 @@ public interface ObjectStorageService {
      * 获取一个对象的下载输入流。
      *
      * @param bucketName 存储桶名称。
-     * @param objectName 对象名称。
+     * @param filePath 对象名称。
      * @return 文件的输入流。
      * @throws Exception 如果获取失败。
      */
@@ -61,7 +61,7 @@ public interface ObjectStorageService {
      * 删除单个对象。
      *
      * @param bucketName 存储桶名称。
-     * @param objectName 对象名称。
+     * @param filePath 对象名称。
      * @throws Exception 如果删除失败。
      */
     void delete(String bucketName, String filePath) throws Exception;
@@ -70,7 +70,7 @@ public interface ObjectStorageService {
      * 批量删除多个对象。
      *
      * @param bucketName  存储桶名称。
-     * @param objectNames 要删除的对象名称列表。
+     * @param filePaths 要删除的对象名称列表。
      * @throws Exception 如果批量删除操作中出现错误。
      */
     void delete(String bucketName, List<String> filePaths) throws Exception;
@@ -79,7 +79,7 @@ public interface ObjectStorageService {
      * 为私有对象生成一个带签名的、有时效的下载URL。
      *
      * @param bucketName 存储桶名称。
-     * @param objectName 对象名称。
+     * @param filePath 对象名称。
      * @param duration   URL的有效时长。
      * @param unit       时长单位。
      * @return 预签名的下载URL。

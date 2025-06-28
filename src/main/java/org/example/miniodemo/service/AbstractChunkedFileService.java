@@ -157,7 +157,7 @@ public abstract class AbstractChunkedFileService {
     /**
      * 删除一个文件及其元数据。
      *
-     * @param objectName 需要删除的文件的对象路径。
+     * @param filePath 需要删除的文件的对象路径。
      * @throws Exception 如果删除过程中发生错误。
      */
     @Transactional
@@ -198,11 +198,8 @@ public abstract class AbstractChunkedFileService {
 
     /**
      * 构建文件元数据
-     * @param objectName 对象名
-     * @param originalFileName 原始文件名
-     * @param fileSize 文件大小
-     * @param contentType 文件类型
-     * @param fileHash 文件哈希值
+     * @param mergeRequestDto 包含文件元数据信息的请求DTO
+     * @param filePath        文件在存储中的完整路径
      * @return 文件元数据
      */
     private FileMetadata buildFileMetadata(MergeRequestDto mergeRequestDto,String filePath) {

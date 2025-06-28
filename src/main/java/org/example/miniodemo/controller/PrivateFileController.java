@@ -96,7 +96,7 @@ public class PrivateFileController extends BaseFileController {
     /**
      * 获取私有文件的预签名下载URL。
      *
-     * @param fileName 需要下载的文件的完整对象路径。
+     * @param filePath 需要下载的文件的完整对象路径。
      * @return 包含预签名URL的响应体。
      */
     @GetMapping("/download-url")
@@ -117,7 +117,7 @@ public class PrivateFileController extends BaseFileController {
     /**
      * 通过后端服务器代理下载私有文件。
      *
-     * @param fileName 需要下载的文件的完整对象路径。
+     * @param filePath 需要下载的文件的完整对象路径。
      * @return 包含文件数据流的响应实体 ({@link Resource})。
      */
     @GetMapping("/download")
