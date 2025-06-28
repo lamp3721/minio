@@ -87,42 +87,6 @@ const {
   gracefulReset,
 } = useChunkUploader(uploaderConfig);
 
-// --- Constants ---
-const CHUNK_SIZE = 5 * 1024 * 1024;
-
-// --- File Hash Calculation ---
-const calculateFileHash = (file) => {
-  return new Promise((resolve, reject) => {
-    const spark = new SparkMD5.ArrayBuffer();
-    const fileReader = new FileReader();
-    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    let currentChunk = 0;
-
-    fileReader.onload = (e) => {
-      spark.append(e.target.result);
-      currentChunk++;
-      if (currentChunk < totalChunks) {
-        loadNext();
-      } else {
-        const hash = spark.end();
-        resolve(hash);
-      }
-    };
-
-    fileReader.onerror = () => {
-      reject('文件读取失败');
-    };
-
-    function loadNext() {
-      const start = currentChunk * CHUNK_SIZE;
-      const end = Math.min(start + CHUNK_SIZE, file.size);
-      fileReader.readAsArrayBuffer(file.slice(start, end));
-    }
-
-    loadNext();
-  });
-};
-
 // --- 上传组件钩子 ---
 /**
  * 自定义Element Plus上传组件的http-request行为。
