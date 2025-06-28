@@ -28,6 +28,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.example.miniodemo.common.util.FilePathUtil;
 import org.example.miniodemo.service.AsyncFileService;
 import org.example.miniodemo.service.AbstractChunkedFileService;
+import org.example.miniodemo.event.EventPublisher;
 
 import java.io.InputStream;
 import java.time.LocalDate;
@@ -55,9 +56,10 @@ public class PublicAssetService extends AbstractChunkedFileService {
     public PublicAssetService(ObjectStorageService objectStorageService,
                               FileMetadataRepository fileMetadataRepository,
                               AsyncFileService asyncFileService,
+                              EventPublisher eventPublisher,
                               MinioBucketConfig bucketConfig,
                               MinioConfig minioConfig) {
-        super(objectStorageService, fileMetadataRepository, asyncFileService);
+        super(objectStorageService, fileMetadataRepository, asyncFileService, eventPublisher);
         this.bucketConfig = bucketConfig;
         this.minioConfig = minioConfig;
     }

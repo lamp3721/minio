@@ -10,6 +10,8 @@ import org.example.miniodemo.repository.FileMetadataRepository;
 import org.example.miniodemo.service.storage.ObjectStorageService;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.example.miniodemo.event.EventPublisher;
+import org.example.miniodemo.event.FileMergedEvent;
 
 import java.io.InputStream;
 import java.util.Comparator;
@@ -26,13 +28,16 @@ public abstract class AbstractChunkedFileService {
     protected final ObjectStorageService objectStorageService;
     protected final FileMetadataRepository fileMetadataRepository;
     protected final AsyncFileService asyncFileService;
+    protected final EventPublisher eventPublisher;
 
     public AbstractChunkedFileService(ObjectStorageService objectStorageService,
                                       FileMetadataRepository fileMetadataRepository,
-                                      AsyncFileService asyncFileService) {
+                                      AsyncFileService asyncFileService,
+                                      EventPublisher eventPublisher) {
         this.objectStorageService = objectStorageService;
         this.fileMetadataRepository = fileMetadataRepository;
         this.asyncFileService = asyncFileService;
+        this.eventPublisher = eventPublisher;
     }
 
     // --- 抽象方法，由子类实现 ---
@@ -52,11 +57,12 @@ public abstract class AbstractChunkedFileService {
     // --- 通用公共方法 ---
 
     /**
-     * 合并成功后，执行特定的异步清理任务。
+     * 已废弃。清理逻辑已移至 FileEventListener 中，由事件驱动。
      * @param batchId 合并批次ID
      * @param objectNames 要删除的分片对象路径列表。
      * @param bucketName 存储桶名称
      */
+    @Deprecated
     protected void triggerAsyncChunkCleanup(String batchId, List<String> objectNames,String bucketName){
         asyncFileService.deleteTemporaryChunks(batchId, objectNames,bucketName);
     }
@@ -116,10 +122,13 @@ public abstract class AbstractChunkedFileService {
 
     /**
      * 合并分片文件。
-     * @return 合并后的文件元数据
-     * @throws Exception 如果列出、合并或删除分片时发生错误，或分片数量超过MinIO的合并限制。
+     * <p>
+     * 此方法现在只负责对象存储层面的合并操作，并发布一个 {@link FileMergedEvent} 事件。
+     * 后续的数据库持久化和分片清理将由事件监听器异步处理。
+     *
+     * @return 合并后的文件元数据（此时尚未持久化）。
+     * @throws Exception 如果列出或合并分片时发生错误。
      */
-    @Transactional
     public FileMetadata mergeChunks(MergeRequestDto mergeRequestDto) throws Exception {
         // 1. 列出并排序所有分片
         List<String> sourceObjectNames = listAndSortChunks(mergeRequestDto.getBatchId());
@@ -128,29 +137,19 @@ public abstract class AbstractChunkedFileService {
         String finalObjectName = FilePathUtil.buildDateBasedPath(mergeRequestDto.getFileName(), mergeRequestDto.getFileHash(), mergeRequestDto.getFolderPath());
         try {
             objectStorageService.compose(getBucketName(), sourceObjectNames, finalObjectName);
+            log.info("【文件合并 - {}】对象存储操作成功。最终对象: '{}'。", getStorageType(), finalObjectName);
         } catch (Exception e) {
             log.error("【文件合并 - {}】对象存储操作失败。最终对象: '{}'。", getStorageType(), finalObjectName, e);
             throw new Exception("对象存储操作失败", e);
         }
 
-        // 3. 记录元信息, 如果失败则执行补偿
-        FileMetadata metadata = buildFileMetadata(mergeRequestDto,finalObjectName);
-        try {
-            fileMetadataRepository.save(metadata);
-        } catch (Exception e) {
-            log.error("【文件合并 - {}】保存元数据出错，将执行补偿操作。最终对象: '{}'。", getStorageType(), finalObjectName, e);
-            // 补偿：删除已合并的文件
-            try {
-                objectStorageService.delete(getBucketName(), finalObjectName);
-            } catch (Exception deleteEx) {
-                log.error("【文件合并 - {}】补偿操作失败，删除对象 '{}' 时发生异常。", getStorageType(), finalObjectName, deleteEx);
-            }
-            throw new Exception("元数据保存失败，合并已回滚", e);
-        }
+        // 3. 构建元数据对象
+        FileMetadata metadata = buildFileMetadata(mergeRequestDto, finalObjectName);
 
-        // 4. 异步删除临时分片
-        log.info("【文件合并 - {}】文件合并成功，将异步清理临时分片。最终对象路径: '{}'。", getStorageType(), finalObjectName);
-        triggerAsyncChunkCleanup(mergeRequestDto.getBatchId(), sourceObjectNames, getBucketName());
+        // 4. 发布文件合并成功事件
+        FileMergedEvent event = new FileMergedEvent(this, metadata, mergeRequestDto.getBatchId(), sourceObjectNames);
+        eventPublisher.publish(event);
+        log.info("【文件合并 - {}】文件合并成功事件已发布。最终对象路径: '{}'。", getStorageType(), finalObjectName);
 
         return metadata;
     }

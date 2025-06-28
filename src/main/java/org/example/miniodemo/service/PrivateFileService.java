@@ -17,6 +17,7 @@ import org.example.miniodemo.config.MinioConfig;
 import org.example.miniodemo.common.util.FilePathUtil;
 import org.example.miniodemo.service.AsyncFileService;
 import org.example.miniodemo.service.AbstractChunkedFileService;
+import org.example.miniodemo.event.EventPublisher;
 
 import java.io.InputStream;
 import java.time.LocalDate;
@@ -44,9 +45,10 @@ public class PrivateFileService extends AbstractChunkedFileService {
     public PrivateFileService(ObjectStorageService objectStorageService,
                               FileMetadataRepository fileMetadataRepository,
                               AsyncFileService asyncFileService,
+                              EventPublisher eventPublisher,
                               MinioBucketConfig bucketConfig,
                               MinioConfig minioConfig) {
-        super(objectStorageService, fileMetadataRepository, asyncFileService);
+        super(objectStorageService, fileMetadataRepository, asyncFileService, eventPublisher);
         this.bucketConfig = bucketConfig;
         this.minioConfig = minioConfig;
     }
