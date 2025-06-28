@@ -36,7 +36,7 @@ public class FileEventListener {
     @Transactional
     @Async
     @Retryable(
-            value = { RuntimeException.class },
+            retryFor = { RuntimeException.class },
             maxAttempts = 3,
             backoff = @Backoff(delay = 2000, multiplier = 2)
     )
