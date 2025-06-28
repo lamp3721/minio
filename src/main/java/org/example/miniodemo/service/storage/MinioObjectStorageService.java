@@ -77,7 +77,7 @@ public class MinioObjectStorageService implements ObjectStorageService {
                     try {
                         Item item = itemResult.get();
                         return StorageObject.builder()
-                                .objectName(item.objectName())
+                                .filePath(item.objectName())
                                 .size(item.size())
                                 .lastModified(item.lastModified())
                                 .build();

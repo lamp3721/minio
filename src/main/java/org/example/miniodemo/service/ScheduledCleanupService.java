@@ -50,7 +50,7 @@ public class ScheduledCleanupService {
             try {
                 List<StorageObject> objects = objectStorageService.listObjects(bucketName, "", true);
                 for (StorageObject object : objects) {
-                    String objectName = object.getObjectName();
+                    String objectName = object.getFilePath();
                     // 尝试从路径中提取哈希。如果能提取到，说明它是一个本应有元数据的最终文件。
                     String hash = FilePathUtil.extractHashFromPath(objectName);
 

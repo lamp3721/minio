@@ -33,7 +33,7 @@ public class FileMetadata implements Serializable {
     /**
      * 文件在存储桶中的完整对象名称/路径
      */
-    private String objectName;
+    private String filePath;
 
     /**
      * 文件的原始名称

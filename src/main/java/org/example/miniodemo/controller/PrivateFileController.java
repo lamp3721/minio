@@ -100,13 +100,13 @@ public class PrivateFileController extends BaseFileController {
      * @return 包含预签名URL的响应体。
      */
     @GetMapping("/download-url")
-    public R<String> getPrivatePresignedDownloadUrl(@RequestParam("fileName") String fileName) {
+    public R<String> getPrivatePresignedDownloadUrl(@RequestParam("filePath") String filePath) {
         try {
-            String safeFileName = PathValidationUtil.clean(fileName);
-            String url = privateFileService.getPresignedPrivateDownloadUrl(safeFileName);
+            String safeFilePath = PathValidationUtil.clean(filePath);
+            String url = privateFileService.getPresignedPrivateDownloadUrl(safeFilePath);
             return R.success(url);
         } catch (IllegalArgumentException e) {
-            log.warn("检测到无效的文件路径: {}", fileName, e);
+            log.warn("检测到无效的文件路径: {}", filePath, e);
             return R.error(ResultCode.BAD_REQUEST, e.getMessage());
         } catch (Exception e) {
             log.error("获取预签名 URL 失败: {}", e.getMessage(), e);
@@ -121,9 +121,9 @@ public class PrivateFileController extends BaseFileController {
      * @return 包含文件数据流的响应实体 ({@link Resource})。
      */
     @GetMapping("/download")
-    public ResponseEntity<Resource> downloadPrivateFile(@RequestParam("fileName") String fileName) {
+    public ResponseEntity<Resource> downloadPrivateFile(@RequestParam("filePath") String filePath) {
         try {
-            String safeFileName = PathValidationUtil.clean(fileName);
+            String safeFileName = PathValidationUtil.clean(filePath);
             InputStream inputStream = privateFileService.downloadPrivateFile(safeFileName);
             String encodedFileName = URLEncoder.encode(safeFileName, StandardCharsets.UTF_8).replaceAll("\\+", "%20");
 
@@ -136,7 +136,7 @@ public class PrivateFileController extends BaseFileController {
                     .body(new InputStreamResource(inputStream));
 
         } catch (IllegalArgumentException e) {
-            log.warn("检测到无效的文件路径: {}", fileName, e);
+            log.warn("检测到无效的文件路径: {}", filePath, e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
         } catch (Exception e) {
             log.error("文件下载失败: {}", e.getMessage(), e);

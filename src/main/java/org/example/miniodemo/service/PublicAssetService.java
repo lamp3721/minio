@@ -1,43 +1,19 @@
 package org.example.miniodemo.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import io.minio.ListObjectsArgs;
-import io.minio.MinioClient;
-import io.minio.RemoveObjectArgs;
-import io.minio.Result;
-import io.minio.PutObjectArgs;
-import io.minio.StatObjectArgs;
-import io.minio.StatObjectResponse;
-import io.minio.GetPresignedObjectUrlArgs;
-import io.minio.messages.Item;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.config.MinioBucketConfig;
 import org.example.miniodemo.config.MinioConfig;
-import org.example.miniodemo.controller.PublicAssetController;
 import org.example.miniodemo.domain.FileMetadata;
-import org.example.miniodemo.domain.StorageObject;
 import org.example.miniodemo.domain.StorageType;
 import org.example.miniodemo.dto.FileDetailDto;
 import org.example.miniodemo.repository.FileMetadataRepository;
 import org.example.miniodemo.service.storage.ObjectStorageService;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
-import org.example.miniodemo.common.util.FilePathUtil;
-import org.example.miniodemo.service.AsyncFileService;
-import org.example.miniodemo.service.AbstractChunkedFileService;
 import org.example.miniodemo.event.EventPublisher;
 
-import java.io.InputStream;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
-import java.util.Optional;
-import java.util.Comparator;
 
 /**
  * 处理公共资源（Public Assets）相关操作的服务层。
@@ -96,9 +72,9 @@ public class PublicAssetService extends AbstractChunkedFileService {
                 .filter(Objects::nonNull)
                 .map(metadata -> FileDetailDto.builder()
                         .name(metadata.getOriginalFilename())
-                        .path(metadata.getObjectName())
+                        .filePath(metadata.getFilePath())
                         .size(metadata.getFileSize())
-                        .url(getPublicUrlFor(metadata.getObjectName()))
+                        .url(getPublicUrlFor(metadata.getFilePath()))
                         .contentType(metadata.getContentType())
                         .build())
                 .collect(Collectors.toList());

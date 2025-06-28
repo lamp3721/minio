@@ -83,13 +83,16 @@ public abstract class BaseFileController {
      * @return 包含操作结果的响应体。
      */
     @DeleteMapping("/delete")
-    public R<String> deleteFile(@RequestParam("fileName") String fileName) {
+    public R<String> deleteFile(@RequestParam(required = false) String filePath) {
         try {
-            String safeFileName = PathValidationUtil.clean(fileName);
+            if (filePath == null || filePath.isBlank()) {
+                return R.error(ResultCode.BAD_REQUEST, "文件名不能为空");
+            }
+            String safeFileName = PathValidationUtil.clean(filePath);
             getService().deleteFile(safeFileName);
             return R.success("文件删除成功: " + safeFileName);
         } catch (IllegalArgumentException e) {
-            log.warn("检测到无效的文件路径: {}", fileName, e);
+            log.warn("检测到无效的文件路径: {}", filePath, e);
             return R.error(ResultCode.BAD_REQUEST, e.getMessage());
         } catch (Exception e) {
             log.error("删除文件失败: {}", e.getMessage(), e);

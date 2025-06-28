@@ -17,7 +17,7 @@ public class StorageObject {
     /**
      * 对象在存储桶中的完整路径和名称。
      */
-    private String objectName;
+    private String filePath;
 
     /**
      * 对象的最后修改时间。

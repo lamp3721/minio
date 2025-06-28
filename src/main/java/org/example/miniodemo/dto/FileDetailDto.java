@@ -18,7 +18,7 @@ public class FileDetailDto {
     /**
      * 文件在存储桶中的完整对象路径。
      */
-    private String path;
+    private String filePath;
     /**
      * 文件的原始名称。
      */

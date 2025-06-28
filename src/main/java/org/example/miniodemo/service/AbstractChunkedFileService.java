@@ -111,7 +111,7 @@ public abstract class AbstractChunkedFileService {
         return chunks.stream()
                 .map(chunk -> {
                     try {
-                        return Integer.parseInt(chunk.getObjectName().substring(chunk.getObjectName().lastIndexOf('/') + 1));
+                        return Integer.parseInt(chunk.getFilePath().substring(chunk.getFilePath().lastIndexOf('/') + 1));
                     } catch (NumberFormatException e) {
                         return null;
                     }
@@ -191,7 +191,7 @@ public abstract class AbstractChunkedFileService {
             throw new Exception("找不到任何分片进行合并，批次ID: " + batchId);
         }
         return chunks.stream()
-                .map(StorageObject::getObjectName)
+                .map(StorageObject::getFilePath)
                 .sorted(Comparator.comparing(s -> Integer.valueOf(s.substring(s.lastIndexOf('/') + 1))))
                 .collect(Collectors.toList());
     }
@@ -208,7 +208,7 @@ public abstract class AbstractChunkedFileService {
     private FileMetadata buildFileMetadata(MergeRequestDto mergeRequestDto,String objectName) {
         FileMetadata metadata = new FileMetadata();
         metadata.setFolderPath(mergeRequestDto.getFolderPath());
-        metadata.setObjectName(objectName);
+        metadata.setFilePath(objectName);
         metadata.setOriginalFilename(mergeRequestDto.getFileName());
         metadata.setFileSize(mergeRequestDto.getFileSize());
         metadata.setContentType(mergeRequestDto.getContentType());

@@ -64,7 +64,7 @@ public class PublicAssetController extends BaseFileController {
             Optional<FileMetadata> metadataOptional = publicAssetService.checkFileExists(checkRequest.getFileHash());
             if (metadataOptional.isPresent()) {
                 FileMetadata metadata = metadataOptional.get();
-                String url = publicAssetService.getPublicUrlFor(metadata.getObjectName());
+                String url = publicAssetService.getPublicUrlFor(metadata.getFilePath());
                 return R.success(new FileExistsDto(true, url));
             } else {
                 return R.success(new FileExistsDto(false));
@@ -85,7 +85,7 @@ public class PublicAssetController extends BaseFileController {
     public R<String> mergePublicChunks(@RequestBody MergeRequestDto mergeRequest) {
         try {
             FileMetadata metadata = publicAssetService.mergeChunks(mergeRequest);
-            String url = publicAssetService.getPublicUrlFor(metadata.getObjectName());
+            String url = publicAssetService.getPublicUrlFor(metadata.getFilePath());
             return R.success(url);
         } catch (Exception e) {
             log.error("公共库文件合并失败: {}", e.getMessage(), e);

@@ -83,7 +83,7 @@ const handleDelete = async (row, fetchFileList) => {
       cancelButtonText: '取消',
       type: 'warning',
     });
-    await apiClient.delete('/public/delete', { params: { fileName: row.path } });
+    await apiClient.delete('/public/delete', { params: { filePath: row.filePath } });
     ElMessage.success('文件删除成功！');
     fetchFileList(); // Refresh the list
   } catch (error) {

@@ -1,32 +1,21 @@
 package org.example.miniodemo.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.minio.errors.MinioException;
 import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.config.MinioBucketConfig;
-import org.example.miniodemo.controller.PrivateFileController;
 import org.example.miniodemo.domain.FileMetadata;
-import org.example.miniodemo.domain.StorageObject;
 import org.example.miniodemo.domain.StorageType;
 import org.example.miniodemo.dto.FileDetailDto;
 import org.example.miniodemo.repository.FileMetadataRepository;
 import org.example.miniodemo.service.storage.ObjectStorageService;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 import org.example.miniodemo.config.MinioConfig;
-import org.example.miniodemo.common.util.FilePathUtil;
-import org.example.miniodemo.service.AsyncFileService;
-import org.example.miniodemo.service.AbstractChunkedFileService;
 import org.example.miniodemo.event.EventPublisher;
 
 import java.io.InputStream;
-import java.time.LocalDate;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import java.util.Optional;
 
 /**
  * 处理私有文件（Private Files）相关操作的服务层。
@@ -75,7 +64,7 @@ public class PrivateFileService extends AbstractChunkedFileService {
                 .filter(Objects::nonNull)
                 .map(metadata -> FileDetailDto.builder()
                         .name(metadata.getOriginalFilename())
-                        .path(metadata.getObjectName())
+                        .filePath(metadata.getFilePath())
                         .size(metadata.getFileSize())
                         .contentType(metadata.getContentType())
                         .visitCount(metadata.getVisitCount())

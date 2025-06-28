@@ -7,6 +7,7 @@
   >
     <!-- Define the action buttons for each row -->
     <template #actions="{ row, fetchFileList }">
+      {{row}}
       <el-button size="small" type="primary" @click="handleDownload(row)">下载</el-button>
       <el-button size="small" type="success" @click="handleCopyLink(row)">复制链接</el-button>
       <el-button size="small" type="danger" @click="handleDelete(row, fetchFileList)">删除</el-button>
@@ -32,7 +33,7 @@ const handleDownload = async (row) => {
     duration: 0,
   });
   try {
-    const url = await apiClient.get('/private/download-url', { params: { fileName: row.path } });
+    const url = await apiClient.get('/private/download-url', { params: { filePath: row.filePath } });
     loadingMessage.close(); // Immediately close the loading message
 
     const link = document.createElement('a');
@@ -54,7 +55,7 @@ const handleCopyLink = async (row) => {
     duration: 0,
   });
   try {
-    const url = await apiClient.get('/private/download-url', { params: { fileName: row.path } });
+    const url = await apiClient.get('/private/download-url', { params: { filePath: row.filePath } });
     await navigator.clipboard.writeText(url);
     loadingMessage.close(); // Immediately close the loading message
     ElMessage.success('下载链接已复制到剪贴板！');
@@ -71,7 +72,7 @@ const handleDelete = async (row, fetchFileList) => {
       cancelButtonText: '取消',
       type: 'warning',
     });
-    await apiClient.delete('/private/delete', { params: { fileName: row.path } });
+    await apiClient.delete('/private/delete', { params: { filePath: row.filePath } });
     ElMessage.success('文件删除成功！');
     fetchFileList(); // Refresh the list
   } catch (error) {

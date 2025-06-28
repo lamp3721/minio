@@ -42,12 +42,12 @@ public class FileEventListener {
     )
     public void onFileMerged(FileMergedEvent event) {
         FileMetadata metadata = event.getFileMetadata();
-        log.info("【事件监听 - 元数据】接收到文件合并事件，准备保存元数据。对象: '{}'", metadata.getObjectName());
+        log.info("【事件监听 - 元数据】接收到文件合并事件，准备保存元数据。对象: '{}'", metadata.getFilePath());
         try {
             fileMetadataRepository.save(metadata);
-            log.info("【事件监听 - 元数据】元数据保存成功。对象: '{}'", metadata.getObjectName());
+            log.info("【事件监听 - 元数据】元数据保存成功。对象: '{}'", metadata.getFilePath());
         } catch (Exception e) {
-            log.error("【事件监听 - 元数据】保存元数据失败，将进行重试（如果未达最大次数）。对象: '{}'，错误: {}", metadata.getObjectName(), e.getMessage());
+            log.error("【事件监听 - 元数据】保存元数据失败，将进行重试（如果未达最大次数）。对象: '{}'，错误: {}", metadata.getFilePath(), e.getMessage());
             // 向上抛出异常，以便 @Retryable 能够捕获并触发重试
             throw new RuntimeException("Failed to save file metadata, triggering retry.", e);
         }
@@ -63,7 +63,7 @@ public class FileEventListener {
     public void recover(RuntimeException e, FileMergedEvent event) {
         FileMetadata metadata = event.getFileMetadata();
         log.error("【恢复方法】所有重试次数已用尽，元数据保存最终失败！请关注后续的孤儿文件清理任务。对象: '{}'，最终错误: {}",
-                metadata.getObjectName(), e.getMessage());
+                metadata.getFilePath(), e.getMessage());
     }
 
     /**
