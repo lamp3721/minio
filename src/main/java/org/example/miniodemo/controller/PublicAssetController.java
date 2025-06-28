@@ -5,36 +5,35 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.common.response.R;
 import org.example.miniodemo.common.response.ResultCode;
 import org.example.miniodemo.domain.FileMetadata;
-import org.example.miniodemo.domain.StorageType;
 import org.example.miniodemo.dto.CheckRequestDto;
 import org.example.miniodemo.dto.FileDetailDto;
 import org.example.miniodemo.dto.FileExistsDto;
 import org.example.miniodemo.dto.MergeRequestDto;
+import org.example.miniodemo.service.AbstractChunkedFileService;
 import org.example.miniodemo.service.PublicAssetService;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 /**
  * 处理公共资源（Public Assets）相关操作的API控制器。
  * <p>
- * "公共资源"是指存储在公开访问存储桶中的对象，通常是图片、CSS、JS等前端静态资源，
- * 它们可以通过直接的URL链接公开访问，无需签名。
+ * 继承自 {@link BaseFileController}，复用了文件上传、删除等通用接口。
  * 所有此控制器下的端点都以 {@code /minio/public} 为前缀。
  */
 @Slf4j
 @RestController
 @RequestMapping("/minio/public")
 @RequiredArgsConstructor
-public class PublicAssetController {
+public class PublicAssetController extends BaseFileController {
 
     private final PublicAssetService publicAssetService;
+
+    @Override
+    protected AbstractChunkedFileService getService() {
+        return publicAssetService;
+    }
 
     /**
      * 获取公共存储桶中所有文件的列表。
@@ -72,51 +71,7 @@ public class PublicAssetController {
             }
         } catch (Exception e) {
             log.error("检查公共文件失败: {}", e.getMessage(), e);
-            // 出现异常时，为安全起见，返回false，让前端继续走上传流程
             return R.success(new FileExistsDto(false));
-        }
-    }
-
-    /**
-     * 上传单个公共文件分片。
-     *
-     * @param file        文件分片数据。
-     * @param batchId     唯一批次ID。
-     * @param chunkNumber 分片序号。
-     * @return 操作结果。
-     */
-    @PostMapping("/upload/chunk")
-    public R<String> uploadPublicChunk(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam("batchId") String batchId,
-            @RequestParam("chunkNumber") Integer chunkNumber) {
-
-        if (file.isEmpty() || batchId.isBlank()) {
-            return R.error(ResultCode.BAD_REQUEST, "文件、批次ID或分片序号不能为空");
-        }
-        try {
-            publicAssetService.uploadChunk(file, batchId, chunkNumber);
-            return R.success("分片 " + chunkNumber + " 上传成功");
-        } catch (Exception e) {
-            log.error("公共库分片上传失败: {}", e.getMessage(), e);
-            return R.error(ResultCode.FILE_UPLOAD_FAILED, "分片上传失败: " + e.getMessage());
-        }
-    }
-
-    /**
-     * 检查并返回已上传的分片列表，用于断点续传。
-     *
-     * @param batchId 唯一标识本次文件上传任务的批次ID。
-     * @return 包含已上传分片序号列表的响应体。
-     */
-    @GetMapping("/uploaded/chunks")
-    public R<List<Integer>> getUploadedChunks(@RequestParam("batchId") String batchId) {
-        try {
-            List<Integer> chunkNumbers = publicAssetService.getUploadedChunkNumbers(batchId);
-            return R.success(chunkNumbers);
-        } catch (Exception e) {
-            log.error("获取公共库已上传分片列表失败: {}", e.getMessage(), e);
-            return R.error(ResultCode.INTERNAL_SERVER_ERROR, Collections.emptyList());
         }
     }
 
@@ -130,29 +85,11 @@ public class PublicAssetController {
     public R<String> mergePublicChunks(@RequestBody MergeRequestDto mergeRequest) {
         try {
             FileMetadata metadata = publicAssetService.mergeChunks(mergeRequest);
-            // 返回文件公开URL
             String url = publicAssetService.getPublicUrlFor(metadata.getObjectName());
             return R.success(url);
         } catch (Exception e) {
             log.error("公共库文件合并失败: {}", e.getMessage(), e);
             return R.error(ResultCode.MERGE_FAILED, "文件合并失败: " + e.getMessage());
-        }
-    }
-
-    /**
-     * 删除一个公共文件。
-     *
-     * @param fileName 需要删除的文件的名称（即在MinIO中的完整对象路径）。
-     * @return 包含操作结果（成功或失败消息）的响应体。
-     */
-    @DeleteMapping("/delete")
-    public R<String> deletePublicFile(@RequestParam("fileName") String fileName) {
-        try {
-            publicAssetService.deletePublicFile(fileName);
-            return R.success("文件删除成功: " + fileName);
-        } catch (Exception e) {
-            log.error("删除公共文件失败: {}", e.getMessage(), e);
-            return R.error(ResultCode.FILE_DELETE_FAILED, "删除失败: " + e.getMessage());
         }
     }
 } 

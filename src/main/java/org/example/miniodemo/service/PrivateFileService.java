@@ -112,18 +112,4 @@ public class PrivateFileService extends AbstractChunkedFileService {
         asyncFileService.updateLastAccessedTime(objectName);
         return objectStorageService.download(getBucketName(), objectName);
     }
-
-    /**
-     * 删除一个私有文件。
-     *
-     * @param objectName 需要删除的文件的对象路径。
-     * @throws Exception 如果删除时出错。
-     */
-    public void deletePrivateFile(String objectName) throws Exception {
-        objectStorageService.delete(getBucketName(), objectName);
-        String hash = FilePathUtil.extractHashFromPath(objectName);
-        if (hash != null) {
-            fileMetadataRepository.deleteByHash(hash, getStorageType());
-        }
-    }
 } 

@@ -101,18 +101,4 @@ public class PublicAssetService extends AbstractChunkedFileService {
                         .build())
                 .collect(Collectors.toList());
     }
-
-    /**
-     * 从公共存储桶中删除一个文件。
-     *
-     * @param objectName 需要删除的文件的对象路径。
-     * @throws Exception 如果删除过程中发生错误。
-     */
-    public void deletePublicFile(String objectName) throws Exception {
-        objectStorageService.delete(getBucketName(), objectName);
-        String hash = FilePathUtil.extractHashFromPath(objectName);
-        if (hash != null) {
-            fileMetadataRepository.deleteByHash(hash, getStorageType());
-        }
-    }
 }

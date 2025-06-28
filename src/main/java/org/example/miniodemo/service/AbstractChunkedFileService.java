@@ -155,6 +155,28 @@ public abstract class AbstractChunkedFileService {
         return metadata;
     }
 
+    /**
+     * 删除一个文件及其元数据。
+     *
+     * @param objectName 需要删除的文件的对象路径。
+     * @throws Exception 如果删除过程中发生错误。
+     */
+    @Transactional
+    public void deleteFile(String objectName) throws Exception {
+        // 1. 从对象存储中删除文件
+        objectStorageService.delete(getBucketName(), objectName);
+
+        // 2. 从数据库中删除元数据
+        String hash = FilePathUtil.extractHashFromPath(objectName);
+        if (hash != null) {
+            fileMetadataRepository.deleteByHash(hash, getStorageType());
+            log.info("【文件删除 - {}】成功删除文件元数据，Hash: {}", getStorageType(), hash);
+        } else {
+            log.warn("【文件删除 - {}】无法从路径中提取Hash，可能未删除元数据: {}", getStorageType(), objectName);
+        }
+        log.info("【文件删除 - {}】成功删除对象: {}", getStorageType(), objectName);
+    }
+
 
     // --- 私有辅助方法 ---
 

@@ -62,7 +62,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, defineProps, toRefs } from 'vue';
+import { ref, onMounted, toRefs } from 'vue';
 import { ElMessage } from 'element-plus';
 import apiClient from '../api';
 import { useChunkUploader } from '../composables/useChunkUploader.js';
