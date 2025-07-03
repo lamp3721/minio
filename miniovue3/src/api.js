@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
 
-export const API_BASE_URL = '/api/minio';
+export const API_BASE_URL = import.meta.env.VITE_API_Prefix;
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
