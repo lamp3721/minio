@@ -76,6 +76,39 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+
+            <plugin>
+                <groupId>com.spotify</groupId>
+                <artifactId>docker-maven-plugin</artifactId>
+                <version>1.2.2</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>javax.activation</groupId>
+                        <artifactId>activation</artifactId>
+                        <version>1.1</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <!-- Docker 主机地址 -->
+                    <dockerHost>https://192.168.0.7:2376</dockerHost>
+
+                     <dockerCertPath>C:\Users\29323\.docker\certs</dockerCertPath>
+
+                    <!-- 镜像名称 -->
+                    <imageName>springboot/${project.artifactId}</imageName>
+
+                    <!-- Dockerfile 目录 -->
+                    <dockerDirectory>src/main/docker</dockerDirectory>
+
+                    <resources>
+                        <resource>
+                            <targetPath>/</targetPath>
+                            <directory>${project.build.directory}</directory>
+                            <include>${project.build.finalName}.jar</include>
+                        </resource>
+                    </resources>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 
