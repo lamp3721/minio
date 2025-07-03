@@ -1,11 +1,21 @@
 <template>
+  <!-- 
+    复用 FileManager 组件来管理私有文件。
+    - title: 设置卡片标题为"私有文件"。
+    - uploader-config: 传入私有文件上传所需的后端API配置。
+    - show-visit-count: 开启"下载次数"列的显示。
+    - actions-width: 为操作列提供更宽的宽度以容纳三个按钮。
+  -->
   <FileManager
     title="私有文件"
     :uploader-config="uploaderConfig"
     :show-visit-count="true"
     actions-width="280"
   >
-    <!-- Define the action buttons for each row -->
+    <!--
+      使用 #actions 插槽来自定义每行文件的操作按钮。
+      私有文件的操作包括：下载、复制临时链接、删除。
+    -->
     <template #actions="{ row, fetchFileList }">
       <el-button size="small" type="primary" @click="handleDownload(row)">下载</el-button>
       <el-button size="small" type="success" @click="handleCopyLink(row)">复制链接</el-button>
@@ -17,66 +27,85 @@
 <script setup>
 import { ElMessage, ElMessageBox } from 'element-plus';
 import apiClient from '../api';
-import FileManager from '../components/FileManager.vue'; // Import the new component
+import FileManager from '../components/FileManager.vue';
 
-// --- Uploader Configuration ---
+// --- 上传器配置 (私有文件) ---
 const uploaderConfig = {
-  apiPrefix: '/private',
-  folderPath: import.meta.env.VITE_Folder_Path
+  apiPrefix: '/private', // 后端API前缀
+  folderPath: import.meta.env.VITE_Folder_Path // 从环境变量读取目标文件夹路径
 };
 
-// --- Action Handlers (specific to this view) ---
+// --- 操作处理函数 (私有文件特有) ---
+
+/**
+ * @description 处理"下载"按钮的点击事件。
+ * @param {object} row - 当前行数据。
+ */
 const handleDownload = async (row) => {
   const loadingMessage = ElMessage.info({
     message: '正在生成下载链接...',
-    duration: 0,
+    duration: 0, // 持续显示直到手动关闭
   });
   try {
+    // 从后端获取一个带签名的临时下载URL
     const url = await apiClient.get('/private/download-url', { params: { filePath: row.filePath } });
-    loadingMessage.close(); // Immediately close the loading message
+    loadingMessage.close(); // 获取到URL后立即关闭加载提示
 
+    // 使用动态创建的<a>标签来触发浏览器下载
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', row.name);
+    link.setAttribute('download', row.name); // 设置下载文件名
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    ElMessage.success('开始下载...');
+    ElMessage.success('文件已开始下载...');
   } catch (error) {
-    loadingMessage.close(); // Also close on error
-    console.error(error); // Interceptor handles user-facing message
+    loadingMessage.close(); // 出错时也要关闭加载提示
+    console.error("下载失败:", error); // API拦截器会处理面向用户的错误消息
   }
 };
 
+/**
+ * @description 处理"复制链接"按钮的点击事件。
+ * @param {object} row - 当前行数据。
+ */
 const handleCopyLink = async (row) => {
   const loadingMessage = ElMessage.info({
-    message: '正在生成下载链接...',
+    message: '正在生成临时下载链接...',
     duration: 0,
   });
   try {
+    // 从后端获取一个带签名的临时下载URL
     const url = await apiClient.get('/private/download-url', { params: { filePath: row.filePath } });
+    // 将URL复制到剪贴板
     await navigator.clipboard.writeText(url);
-    loadingMessage.close(); // Immediately close the loading message
-    ElMessage.success('下载链接已复制到剪贴板！');
+    loadingMessage.close();
+    ElMessage.success('临时下载链接已复制到剪贴板！');
   } catch (error) {
-    loadingMessage.close(); // Also close on error
-    console.error(error); // Interceptor handles user-facing message
+    loadingMessage.close();
+    console.error("复制链接失败:", error);
   }
 };
 
+/**
+ * @description 处理"删除"按钮的点击事件。
+ * @param {object} row - 当前行数据。
+ * @param {Function} fetchFileList - 由 FileManager 组件传入的刷新列表函数。
+ */
 const handleDelete = async (row, fetchFileList) => {
   try {
-    await ElMessageBox.confirm(`确定要删除文件 "${row.name}" 吗？`, '警告', {
-      confirmButtonText: '确定',
+    await ElMessageBox.confirm(`确定要删除私有文件 "${row.name}" 吗？此操作不可恢复！`, '警告', {
+      confirmButtonText: '确定删除',
       cancelButtonText: '取消',
       type: 'warning',
     });
+    // 调用后端删除接口
     await apiClient.delete('/private/delete', { params: { filePath: row.filePath } });
     ElMessage.success('文件删除成功！');
-    fetchFileList(); // Refresh the list
+    fetchFileList(); // 刷新列表
   } catch (error) {
     if (error !== 'cancel') {
-      console.error(error); // Interceptor handles user-facing message
+      console.error("删除文件失败:", error);
     }
   }
 };

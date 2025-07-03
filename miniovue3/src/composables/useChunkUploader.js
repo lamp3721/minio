@@ -5,41 +5,58 @@ import { storageService } from '../services/storageService';
 
 // --- 常量定义 ---
 /**
- * 文件分片大小，这里设置为 5MB。
+ * @description 文件分片大小，固定为5MB。
+ * MinIO官方推荐分片大小为5MB到5GB之间，5MB是最小且常用的值。
  * @type {number}
  */
 const CHUNK_SIZE = 5 * 1024 * 1024;
 
 /**
- * 一个处理分片上传的 Vue Composable，集成了秒传和断点续传功能。
+ * @description 一个处理分片上传的 Vue Composable，封装了秒传、断点续传和普通上传的所有逻辑。
  * @param {object} uploaderConfig - 上传器配置对象。
- * @param {string} uploaderConfig.apiPrefix - 实际用于API请求的URL前缀。
- * @returns {object} 返回一个包含响应式状态和方法的对象，用于在组件中控制上传过程。
+ * @param {string} uploaderConfig.apiPrefix - 用于API请求的URL前缀 (例如, '/api/assets' 或 '/api/private')。
+ * @param {string} [uploaderConfig.folderPath] - 文件在存储中的目标文件夹路径。
+ * @returns {object} 返回一个包含响应式状态和方法的对象，供Vue组件使用。
  */
 export function useChunkUploader(uploaderConfig) {
   // --- 响应式状态定义 ---
 
-  // 标记当前是否有文件正在上传，用于禁用上传按钮等UI交互。
+  /**
+   * @description 标记当前是否有文件正在上传。
+   * @type {import('vue').Ref<boolean>}
+   */
   const isUploading = ref(false);
 
-  // 上传进度对象，直接驱动UI中的进度条和状态文本。
+  /**
+   * @description 上传进度状态，用于驱动UI更新。
+   * @type {import('vue').Ref<{percentage: number, status: string}>}
+   */
   const uploadProgress = ref({ percentage: 0, status: '' });
 
-  // 实时上传速度字符串，例如 "2.5 MB/s"。
+  /**
+   * @description 实时上传速度 (MB/s)。
+   * @type {import('vue').Ref<string>}
+   */
   const uploadSpeed = ref('');
 
-  // 上传已耗时的时间字符串，格式为 "mm:ss"。
+  /**
+   * @description 上传已耗时，格式为 "mm:ss"。
+   * @type {import('vue').Ref<string>}
+   */
   const elapsedTime = ref('00:00');
-
-  // 计时器的引用，用于在上传开始时启动，在结束或失败时清除。
+  
+  /**
+   * @description 耗时计时器的实例引用。
+   * @type {import('vue').Ref<number|null>}
+   */
   const uploadTimer = ref(null);
 
   // --- 内部辅助函数 ---
 
   /**
-   * 计算文件的MD5哈希值。
+   * @description 计算文件的MD5哈希值。
    * @param {File} file - 需要计算哈希的文件对象。
-   * @returns {Promise<string>} 返回一个Promise，解析后为文件的MD5哈希字符串。
+   * @returns {Promise<string>} 返回文件的MD5哈希字符串。
    */
   const calculateFileHash = (file) => {
     return new Promise((resolve, reject) => {
@@ -57,7 +74,7 @@ export function useChunkUploader(uploaderConfig) {
           resolve(spark.end());
         }
       };
-      fileReader.onerror = () => reject('文件读取失败');
+      fileReader.onerror = () => reject('文件读取失败，无法计算MD5');
 
       const loadNext = () => {
         const start = currentChunk * CHUNK_SIZE;
@@ -68,7 +85,9 @@ export function useChunkUploader(uploaderConfig) {
     });
   };
 
-  //启动一个计时器，用于更新上传耗时。
+  /**
+   * @description 启动一个计时器，用于更新UI上显示的已耗时。
+   */
   const startTimer = () => {
     let seconds = 0;
     uploadTimer.value = setInterval(() => {
@@ -79,31 +98,35 @@ export function useChunkUploader(uploaderConfig) {
     }, 1000);
   };
 
-  // 停止并清除计时器。
+  /**
+   * @description 停止并清除计时器。
+   */
   const stopTimer = () => {
     clearInterval(uploadTimer.value);
     uploadTimer.value = null;
   };
 
-  // 重置上传状态，通常在上传失败或取消时调用。
+  /**
+   * @description 重置所有与上传相关的状态，通常在上传失败、取消或完成时调用。
+   */
   const resetUploadState = () => {
     isUploading.value = false;
     stopTimer();
   }
   
   /**
-   * 在上传成功后，优雅地重置UI状态（如进度条和文件列表）。
-   * @param {import('vue').Ref} uploadRef - Element Plus上传组件的引用。
-   * @param {number} [duration=1500] - 延迟执行的毫秒数。
+   * @description 在上传成功后，延迟一段时间后优雅地重置UI状态（如进度条和文件列表）。
+   * @param {import('vue').Ref} uploadRef - Element Plus上传组件的`ref`引用。
+   * @param {number} [duration=3000] - 延迟执行的毫秒数。
    */
    const gracefulReset = (uploadRef, duration = 3000) => {
         setTimeout(() => {
-            if (!isUploading.value) { // 再次确认已无上传任务
+            if (!isUploading.value) { // 再次确认已无上传任务，防止重置正在进行的上传
                 uploadProgress.value = { percentage: 0, status: '' };
                 uploadSpeed.value = '';
                 elapsedTime.value = '00:00';
                 if (uploadRef.value) {
-                    uploadRef.value.clearFiles();
+                    uploadRef.value.clearFiles(); // 清空el-upload组件的文件列表
                 }
             }
         }, duration);
@@ -111,10 +134,10 @@ export function useChunkUploader(uploaderConfig) {
 
   // --- 核心上传逻辑 ---
   /**
-   * 处理文件上传的主函数。
+   * @description 处理文件上传的主流程函数。
    * @param {File} file - 用户选择的待上传文件。
-   * @param {Function} onUploadComplete - 上传成功后的回调函数，通常用于刷新文件列表。
-   * @returns {Promise<{isSuccess: boolean, gracefulResetNeeded?: boolean}|undefined>}
+   * @param {Function} onUploadComplete - 上传成功后的回调函数，外部组件可以传入此函数来刷新文件列表。
+   * @returns {Promise<{isSuccess: boolean, gracefulResetNeeded?: boolean}|undefined>} 返回一个对象，指示上传是否成功以及是否需要后续的UI重置。
    */
   const handleUpload = async (file, onUploadComplete) => {
     if (isUploading.value) {
@@ -127,21 +150,21 @@ export function useChunkUploader(uploaderConfig) {
     elapsedTime.value = '00:00';
     uploadSpeed.value = '';
     
-    // 步骤 1: 计算文件哈希
+    // 步骤 1: 计算文件哈希 (MD5)
     let fileHash;
     try {
       fileHash = await calculateFileHash(file);
-      uploadProgress.value.status = `文件Hash: ${fileHash}`;
+      uploadProgress.value.status = `文件哈希计算完成`;
     } catch (e) {
       ElMessage.error(e.toString());
       resetUploadState();
       return;
     }
 
-    // 使用文件哈希作为批次ID，是实现秒传和断点续传的关键
+    // 使用文件哈希作为上传批次ID (batchId)，这是实现秒传和断点续传的关键。
     const batchId = fileHash;
 
-    // 步骤 2: 检查文件是否存在（秒传功能）
+    // 步骤 2: 检查文件是否已存在于服务器（实现秒传）
     try {
       const checkResult = await storageService.checkFile(uploaderConfig, fileHash);
       if (checkResult.exists) {
@@ -152,40 +175,40 @@ export function useChunkUploader(uploaderConfig) {
         return { isSuccess: true, gracefulResetNeeded: true };
       }
     } catch (e) {
-      // API请求拦截器会自动处理错误消息
+      // API请求的错误消息会由axios拦截器自动处理
       resetUploadState();
       return { isSuccess: false };
     }
 
-    // 步骤 3: 检查已上传的分片（断点续传功能）
+    // 步骤 3: 检查已上传的分片，获取断点信息
     let uploadedChunks = [];
     try {
         uploadedChunks = await storageService.getUploadedChunks(uploaderConfig, batchId);
         if (uploadedChunks && uploadedChunks.length > 0) {
-            ElMessage.info(`检测到上次上传进度，将从断点处继续上传。`);
+            ElMessage.info(`检测到上次的上传进度，将从断点处继续。`);
         }
     } catch (e) {
         ElMessage.warning('检查断点失败，将从头开始上传。');
     }
 
-    // 步骤 4: 对文件进行切片，并准备上传任务
+    // 步骤 4: 对文件进行切片，并并发上传所有未上传的分片
     const chunkCount = Math.ceil(file.size / CHUNK_SIZE);
     let uploadedCount = uploadedChunks.length;
-    let totalLoaded = uploadedChunks.length * CHUNK_SIZE; // 已上传的总字节数
+    let totalLoaded = uploadedChunks.length * CHUNK_SIZE; // 初始化已上传的总字节数
     
     uploadProgress.value = { 
-        percentage: Math.floor((uploadedCount / chunkCount) * 100), 
+        percentage: chunkCount > 0 ? Math.floor((uploadedCount / chunkCount) * 100) : 0,
         status: '准备上传...' 
     };
 
     const uploadPromises = [];
-    const initialLoaded = totalLoaded; // 记录初始已上传大小，用于计算平均速度
     let lastTime = Date.now();
     let lastTotalLoaded = totalLoaded; // 用于计算瞬时速度
     startTimer();
 
     for (let i = 0; i < chunkCount; i++) {
-        if (uploadedChunks.includes(i)) continue; // 跳过已上传的分片
+        // 跳过已上传的分片
+        if (uploadedChunks.includes(i)) continue;
 
         const chunk = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
         const formData = new FormData();
@@ -196,18 +219,28 @@ export function useChunkUploader(uploaderConfig) {
         const promise = storageService.uploadChunk(uploaderConfig, formData).then(() => {
             uploadedCount++;
             totalLoaded += chunk.size;
+            
+            // 更新进度条
             uploadProgress.value = { 
                 percentage: Math.floor((uploadedCount / chunkCount) * 100), 
                 status: `正在上传分片: ${uploadedCount} / ${chunkCount}` 
             };
+            
+            // 计算并更新上传速度
             const now = Date.now();
-            const speed = (totalLoaded - lastTotalLoaded) / ((now - lastTime) / 1000);
-            uploadSpeed.value = `${(speed / 1024 / 1024).toFixed(2)} MB/s`;
+            const timeDiff = (now - lastTime) / 1000; // 秒
+            const loadedSinceLast = totalLoaded - lastTotalLoaded;
+            if (timeDiff > 0.5) { // 每隔0.5秒更新一次速度，避免频繁刷新
+                const speed = loadedSinceLast / timeDiff; // B/s
+                uploadSpeed.value = `${(speed / 1024 / 1024).toFixed(2)} MB/s`;
+                lastTime = now;
+                lastTotalLoaded = totalLoaded;
+            }
         });
         uploadPromises.push(promise);
     }
     
-    // 并发上传所有未完成的分片
+    // 等待所有分片上传完成
     try {
         await Promise.all(uploadPromises);
     } catch(e) {
@@ -216,7 +249,7 @@ export function useChunkUploader(uploaderConfig) {
         return { isSuccess: false };
     }
 
-    // 步骤 5: 所有分片上传完毕，通知服务器合并
+    // 步骤 5: 所有分片上传完毕，通知服务器合并文件
     try {
       uploadProgress.value.status = '正在合并文件...';
       const mergeData = {
@@ -225,7 +258,7 @@ export function useChunkUploader(uploaderConfig) {
         fileHash: fileHash,
         fileSize: file.size,
         contentType: file.type,
-        folderPath: uploaderConfig.folderPath // 从配置中读取 folderPath
+        folderPath: uploaderConfig.folderPath || '' // 从配置中读取 folderPath，若无则为空
       };
       const result = await storageService.mergeChunks(uploaderConfig, mergeData);
       
@@ -238,7 +271,7 @@ export function useChunkUploader(uploaderConfig) {
       return { isSuccess: true, gracefulResetNeeded: true };
 
     } catch (e) {
-      // API请求拦截器会自动处理错误消息
+      // API请求的错误消息会由axios拦截器自动处理
       resetUploadState();
       return { isSuccess: false };
     }
@@ -251,6 +284,6 @@ export function useChunkUploader(uploaderConfig) {
     uploadSpeed,
     elapsedTime,
     handleUpload,
-    gracefulReset
+    gracefulReset,
   };
 } 
