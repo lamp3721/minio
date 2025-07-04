@@ -134,7 +134,7 @@ public abstract class AbstractChunkedFileService {
         List<String> sourceObjectNames = listAndSortChunks(mergeRequestDto.getBatchId());
 
         // 2. 构建最终对象路径并合并
-        String finalFilePath = FilePathUtil.buildDateBasedPath(mergeRequestDto.getFileName(), mergeRequestDto.getFileHash(), mergeRequestDto.getFolderPath());
+        String finalFilePath = FilePathUtil.buildDateBasedPath(mergeRequestDto.getFolderPath(),mergeRequestDto.getFileHash(), mergeRequestDto.getFileName());
         try {
             objectStorageService.compose(getBucketName(), sourceObjectNames, finalFilePath);
             log.info("【文件合并 - {}】对象存储操作成功。最终对象: '{}'。", getStorageType(), finalFilePath);

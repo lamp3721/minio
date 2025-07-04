@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit;
  */
 public interface ObjectStorageService {
 
-    /**
+     /**
      * 上传一个对象。
      *
      * @param bucketName  存储桶名称。

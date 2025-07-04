@@ -8,7 +8,7 @@ import lombok.Data;
 @Data
 public class MergeRequestDto {
     /**
-     * 文件的存储路径。默认为 "default"。
+     * 文件的合并存储最终顶级路径。默认为 "default"。
      */
     String folderPath = "default";
     /**

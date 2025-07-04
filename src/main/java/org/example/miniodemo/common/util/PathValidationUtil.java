@@ -27,16 +27,16 @@ public final class PathValidationUtil {
      */
     public static String clean(String path) {
         if (path == null) {
-            throw new IllegalArgumentException("Path cannot be null.");
+            throw new IllegalArgumentException("路径不能为空.");
         }
         String cleanedPath = StringUtils.cleanPath(path);
 
         if (cleanedPath.contains("..")) {
-            throw new IllegalArgumentException("Invalid Path: Directory traversal sequences ('..') are not allowed.");
+            throw new IllegalArgumentException("无效路径：不允许使用目录遍历序列（“..”）。");
         }
 
         if (cleanedPath.startsWith("/")) {
-            throw new IllegalArgumentException("Invalid Path: Absolute paths are not allowed.");
+            throw new IllegalArgumentException("无效路径：不允许使用绝对路径。");
         }
 
         return cleanedPath;

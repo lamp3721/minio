@@ -150,6 +150,7 @@ const {
  */
 const customUploadRequest = async (options) => {
   const result = await handleUpload(options.file, fetchFileList);
+  console.log('URL：', result.fileUrl);
   // 如果上传成功且需要UI重置，则调用 gracefulReset
   if (result && result.isSuccess && result.gracefulResetNeeded) {
     gracefulReset(uploadRef);

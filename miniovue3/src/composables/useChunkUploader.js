@@ -137,7 +137,7 @@ export function useChunkUploader(uploaderConfig) {
    * @description 处理文件上传的主流程函数。
    * @param {File} file - 用户选择的待上传文件。
    * @param {Function} onUploadComplete - 上传成功后的回调函数，外部组件可以传入此函数来刷新文件列表。
-   * @returns {Promise<{isSuccess: boolean, gracefulResetNeeded?: boolean}|undefined>} 返回一个对象，指示上传是否成功以及是否需要后续的UI重置。
+   * @returns {Promise<{isSuccess: boolean, gracefulResetNeeded?: boolean}|undefined>,fileUrl:String} 返回一个对象，指示上传是否成功以及是否需要后续的UI重置。以及文件的URL
    */
   const handleUpload = async (file, onUploadComplete) => {
     if (isUploading.value) {
@@ -167,12 +167,13 @@ export function useChunkUploader(uploaderConfig) {
     // 步骤 2: 检查文件是否已存在于服务器（实现秒传）
     try {
       const checkResult = await storageService.checkFile(uploaderConfig, fileHash);
+      console.log('文件已存在：', checkResult.url)
       if (checkResult.exists) {
         uploadProgress.value = { percentage: 100, status: '秒传成功！' };
         ElMessage.success('文件已存在，秒传成功！');
         resetUploadState();
         if (onUploadComplete) onUploadComplete();
-        return { isSuccess: true, gracefulResetNeeded: true };
+        return { isSuccess: true, gracefulResetNeeded: true,fileUrl: checkResult.url };
       }
     } catch (e) {
       // API请求的错误消息会由axios拦截器自动处理
@@ -268,7 +269,7 @@ export function useChunkUploader(uploaderConfig) {
       ElMessage.success(successMessage);
       resetUploadState();
       if (onUploadComplete) onUploadComplete();
-      return { isSuccess: true, gracefulResetNeeded: true };
+      return { isSuccess: true, gracefulResetNeeded: true, fileUrl: result };
 
     } catch (e) {
       // API请求的错误消息会由axios拦截器自动处理

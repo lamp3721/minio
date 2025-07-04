@@ -21,7 +21,7 @@ public final class FilePathUtil {
      * @param fileHash         文件的内容哈希。
      * @return 生成的对象存储路径，格式为 "YYYY/MM/DD/hash/originalFileName"。
      */
-    public static String buildDateBasedPath(String originalFileName, String fileHash, String folderPath) {
+    public static String buildDateBasedPath(String folderPath, String fileHash,String originalFileName ) {
         LocalDate now = LocalDate.now();
         String year = String.valueOf(now.getYear());
         String month = String.format("%02d", now.getMonthValue());
