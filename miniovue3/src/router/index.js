@@ -20,7 +20,7 @@ const routes = [
 ];
 
 const router = createRouter({
-  history: createWebHistory(), // 使用 HTML5 History 模式，路径更美观
+  history: createWebHistory('/view'), // 使用 HTML5 History 模式，路径更美观
   routes,
 });
 
