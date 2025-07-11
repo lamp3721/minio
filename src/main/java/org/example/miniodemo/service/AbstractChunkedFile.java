@@ -1,0 +1,26 @@
+package org.example.miniodemo.service;
+
+import org.example.miniodemo.domain.FileMetadata;
+import org.example.miniodemo.dto.MergeRequestDto;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
+import java.util.Optional;
+
+public interface AbstractChunkedFile {
+
+    // 检查文件是否存在
+    Optional<FileMetadata> checkFileExists(String fileHash);
+
+    // 上传一个分片
+    void uploadChunk(MultipartFile file, String batchId, Integer chunkNumber) throws Exception;
+
+    // 获取已上传的分片列表。
+    List<Integer> getUploadedChunkNumbers(String batchId) throws Exception;
+
+    // 合并分片文件
+    FileMetadata mergeChunks(MergeRequestDto mergeRequestDto) throws Exception;
+
+    // 删除一个文件及其元数据。
+    void deleteFile(String filePath) throws Exception;
+}

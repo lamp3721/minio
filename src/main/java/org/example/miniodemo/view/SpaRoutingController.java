@@ -19,4 +19,12 @@ public class SpaRoutingController {
         return "forward:/view/index.html";
     }
 
+    /**
+     * 捕获所有没有被其他控制器处理的路径（全局兜底）。
+     */
+    @RequestMapping(value = "/{path:^(?!.*\\.).*$}")
+    public String forwardAll() {
+        return "forward:/view/index.html";
+    }
+
 }

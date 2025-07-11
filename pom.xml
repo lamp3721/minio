@@ -90,7 +90,7 @@
                 </dependencies>
                 <configuration>
                     <!-- Docker 主机地址 -->
-                    <dockerHost>https://192.168.0.7:2376</dockerHost>
+                    <dockerHost>https://117.72.195.148:2376</dockerHost>
 
                      <dockerCertPath>C:\Users\29323\.docker\certs</dockerCertPath>
 

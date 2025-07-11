@@ -9,8 +9,9 @@ import org.example.miniodemo.dto.CheckRequestDto;
 import org.example.miniodemo.dto.FileDetailDto;
 import org.example.miniodemo.dto.FileExistsDto;
 import org.example.miniodemo.dto.MergeRequestDto;
-import org.example.miniodemo.service.AbstractChunkedFileService;
 import org.example.miniodemo.service.PublicAssetService;
+import org.example.miniodemo.service.impl.AbstractChunkedFileServiceImpl;
+import org.example.miniodemo.service.impl.PublicAssetServiceImpl;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -31,7 +32,7 @@ public class PublicAssetController extends BaseFileController {
     private final PublicAssetService publicAssetService;
 
     @Override
-    protected AbstractChunkedFileService getService() {
+    protected PublicAssetService getService() {
         return publicAssetService;
     }
 

@@ -1,5 +1,6 @@
-package org.example.miniodemo.service;
+package org.example.miniodemo.service.impl;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.common.util.FilePathUtil;
 import org.example.miniodemo.domain.FileMetadata;
@@ -7,6 +8,8 @@ import org.example.miniodemo.domain.StorageObject;
 import org.example.miniodemo.domain.StorageType;
 import org.example.miniodemo.dto.MergeRequestDto;
 import org.example.miniodemo.repository.FileMetadataRepository;
+import org.example.miniodemo.service.AbstractChunkedFile;
+import org.example.miniodemo.service.AsyncFileService;
 import org.example.miniodemo.service.storage.ObjectStorageService;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -23,22 +26,13 @@ import java.util.stream.Collectors;
  * 抽象分片文件服务，封装了分片上传、合并和秒传的通用逻辑。
  */
 @Slf4j
-public abstract class AbstractChunkedFileService {
+@RequiredArgsConstructor
+public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedFile{
 
     protected final ObjectStorageService objectStorageService;
     protected final FileMetadataRepository fileMetadataRepository;
     protected final AsyncFileService asyncFileService;
     protected final EventPublisher eventPublisher;
-
-    public AbstractChunkedFileService(ObjectStorageService objectStorageService,
-                                      FileMetadataRepository fileMetadataRepository,
-                                      AsyncFileService asyncFileService,
-                                      EventPublisher eventPublisher) {
-        this.objectStorageService = objectStorageService;
-        this.fileMetadataRepository = fileMetadataRepository;
-        this.asyncFileService = asyncFileService;
-        this.eventPublisher = eventPublisher;
-    }
 
     // --- 抽象方法，由子类实现 ---
 
@@ -52,20 +46,6 @@ public abstract class AbstractChunkedFileService {
      */
     protected abstract StorageType getStorageType();
 
-
-
-    // --- 通用公共方法 ---
-
-    /**
-     * 已废弃。清理逻辑已移至 FileEventListener 中，由事件驱动。
-     * @param batchId 合并批次ID
-     * @param objectNames 要删除的分片对象路径列表。
-     * @param bucketName 存储桶名称
-     */
-    @Deprecated
-    protected void triggerAsyncChunkCleanup(String batchId, List<String> objectNames,String bucketName){
-        asyncFileService.deleteTemporaryChunks(batchId, objectNames,bucketName);
-    }
 
     /**
      * 检查文件是否存在

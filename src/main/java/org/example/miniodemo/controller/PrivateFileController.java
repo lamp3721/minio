@@ -9,8 +9,9 @@ import org.example.miniodemo.dto.CheckRequestDto;
 import org.example.miniodemo.dto.FileDetailDto;
 import org.example.miniodemo.dto.FileExistsDto;
 import org.example.miniodemo.dto.MergeRequestDto;
-import org.example.miniodemo.service.AbstractChunkedFileService;
 import org.example.miniodemo.service.PrivateFileService;
+import org.example.miniodemo.service.impl.AbstractChunkedFileServiceImpl;
+import org.example.miniodemo.service.impl.PrivateFileServiceImpl;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -39,7 +40,7 @@ public class PrivateFileController extends BaseFileController {
     private final PrivateFileService privateFileService;
 
     @Override
-    protected AbstractChunkedFileService getService() {
+    protected PrivateFileService getService() {
         return privateFileService;
     }
 

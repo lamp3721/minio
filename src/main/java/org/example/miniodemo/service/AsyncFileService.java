@@ -19,7 +19,6 @@ public class AsyncFileService {
 
     private final FileMetadataRepository fileMetadataRepository;
     private final ObjectStorageService objectStorageService;
-    private final MinioBucketConfig bucketConfig;
 
     /**
      * 异步更新文件的最后访问时间。

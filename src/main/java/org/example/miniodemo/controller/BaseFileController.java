@@ -4,7 +4,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.common.response.R;
 import org.example.miniodemo.common.response.ResultCode;
 import org.example.miniodemo.common.util.PathValidationUtil;
-import org.example.miniodemo.service.AbstractChunkedFileService;
+import org.example.miniodemo.service.AbstractChunkedFile;
+import org.example.miniodemo.service.PrivateFileService;
+import org.example.miniodemo.service.impl.AbstractChunkedFileServiceImpl;
+import org.example.miniodemo.service.impl.PrivateFileServiceImpl;
+import org.example.miniodemo.service.impl.PublicAssetServiceImpl;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,8 +22,8 @@ import java.util.List;
  * 抽象文件控制器，封装了文件上传和管理的通用API端点。
  * <p>
  * 通过定义一个抽象的 {@link #getService()} 方法，使得子类能够注入具体的文件服务
- * (例如 {@link org.example.miniodemo.service.PublicAssetService}
- * 或 {@link org.example.miniodemo.service.PrivateFileService})，
+ * (例如 {@link PublicAssetServiceImpl}
+ * 或 {@link PrivateFileServiceImpl})，
  * 从而复用这些通用的API逻辑。
  */
 @Slf4j
@@ -28,9 +32,9 @@ public abstract class BaseFileController {
     /**
      * 抽象方法，由子类实现，用于提供具体的文件服务实例。
      *
-     * @return 继承自 {@link AbstractChunkedFileService} 的服务实例。
+     * @return 继承自 {@link AbstractChunkedFileServiceImpl} 的服务实例。
      */
-    protected abstract AbstractChunkedFileService getService();
+    protected abstract AbstractChunkedFile getService();
 
     /**
      * 通用的上传文件分片端点。
