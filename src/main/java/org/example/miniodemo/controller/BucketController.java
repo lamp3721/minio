@@ -1,5 +1,6 @@
 package org.example.miniodemo.controller;
 
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.config.MinioBucketConfig;
@@ -44,10 +45,16 @@ public class BucketController {
                 bucketService.makeBucket(bucketConfig.getPublicAssets());
                 log.info("存储桶 '{}' 创建成功。", bucketConfig.getPublicAssets());
             }
+            log.info("存储桶初始化成功或已存在。");
             return R.success("存储桶初始化成功或已存在。");
         } catch (Exception e) {
             log.error("存储桶初始化失败: {}", e.getMessage(), e);
             return R.error(ResultCode.BUCKET_CREATION_FAILED, "存储桶初始化失败: " + e.getMessage());
         }
+    }
+
+    @PostConstruct
+    public void init() {
+        initBuckets();
     }
 }
