@@ -51,7 +51,7 @@ public class PublicAssetServiceImpl extends AbstractChunkedFileServiceImpl imple
     protected StorageType getStorageType() {
         return StorageType.PUBLIC;
     }
-    
+
     /**
      * 为给定的对象名生成公开访问URL。
      *
@@ -64,9 +64,12 @@ public class PublicAssetServiceImpl extends AbstractChunkedFileServiceImpl imple
     }
 
     /**
-     * 获取公共存储桶中所有文件的列表。
+     * 列出所有公开存储的文件详情。
      *
-     * @return 包含文件详细信息的DTO ({@link FileDetailDto}) 列表。
+     * <p>从数据库中查询指定存储类型下的所有文件元数据，
+     * 并转换为包含访问 URL 的文件详情 DTO 列表返回。
+     *
+     * @return 包含文件名、路径、文件大小、访问 URL 及内容类型的文件详情列表
      */
     @Override
     public List<FileDetailDto> listPublicFiles() {
@@ -78,9 +81,10 @@ public class PublicAssetServiceImpl extends AbstractChunkedFileServiceImpl imple
                         .name(metadata.getOriginalFilename())
                         .filePath(metadata.getFilePath())
                         .size(metadata.getFileSize())
-                        .url(getPublicUrlFor(metadata.getFilePath()))
+                        .url(getPublicUrlFor(metadata.getFilePath()))  // 生成文件的公网访问URL
                         .contentType(metadata.getContentType())
                         .build())
                 .collect(Collectors.toList());
     }
+
 }

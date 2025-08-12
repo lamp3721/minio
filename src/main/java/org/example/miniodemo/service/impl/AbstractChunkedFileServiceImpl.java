@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @RequiredArgsConstructor
-public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedFile{
+public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedFile {
 
     protected final ObjectStorageService objectStorageService;
     protected final FileMetadataRepository fileMetadataRepository;
@@ -49,6 +49,7 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
 
     /**
      * 检查文件是否存在
+     *
      * @param fileHash 文件哈希值
      * @return 文件元数据
      */
@@ -58,8 +59,9 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
 
     /**
      * 上传一个分片
-     * @param file  文件
-     * @param batchId 批次ID
+     *
+     * @param file        文件
+     * @param batchId     批次ID
      * @param chunkNumber 分片序号
      * @throws Exception 如果上传分片时发生错误。
      */
@@ -78,6 +80,7 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
 
     /**
      * 获取已上传的分片列表。
+     *
      * @param batchId 分片上传批次ID。
      * @return 已上传的分片列表。
      * @throws Exception 如果查询时出错。
@@ -110,11 +113,11 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
      * @throws Exception 如果列出或合并分片时发生错误。
      */
     public FileMetadata mergeChunks(MergeRequestDto mergeRequestDto) throws Exception {
-        // 1. 列出并排序所有分片
+        // 1. 列出并排序所有分片  cf17ce6f77e88fefd44ccb2f0e751967/0  加上桶即使完整路径
         List<String> sourceObjectNames = listAndSortChunks(mergeRequestDto.getBatchId());
 
         // 2. 构建最终对象路径并合并
-        String finalFilePath = FilePathUtil.buildDateBasedPath(mergeRequestDto.getFolderPath(),mergeRequestDto.getFileHash(), mergeRequestDto.getFileName());
+        String finalFilePath = FilePathUtil.buildDateBasedPath(mergeRequestDto.getFolderPath(), mergeRequestDto.getFileHash(), mergeRequestDto.getFileName());
         try {
             objectStorageService.compose(getBucketName(), sourceObjectNames, finalFilePath);
             log.info("【文件合并 - {}】对象存储操作成功。最终对象: '{}'。", getStorageType(), finalFilePath);
@@ -159,17 +162,27 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
 
     // --- 私有辅助方法 ---
 
+
     /**
-     * 获取分片存储桶名称。
-     * @param batchId 分片上传批次ID
-     * @return 分片存储桶名称
-     * @throws Exception 如果获取分片存储桶名称时发生错误。
+     * 列出指定批次ID下的所有分片对象，并按分片编号进行排序。
+     * <p>
+     * 该方法会调用对象存储服务，获取批次目录下的所有文件（分片），
+     * 并根据文件名中最后的数字（假设为分片编号）进行升序排序，方便后续合并操作。
+     *
+     * @param batchId 批次ID，对应存储桶中的目录前缀
+     * @return 按分片编号排序后的分片文件路径列表
+     * @throws Exception 如果找不到任何分片文件，则抛出异常
      */
     private List<String> listAndSortChunks(String batchId) throws Exception {
+        // 调用对象存储服务列出该批次目录下所有分片对象，递归查询
         List<StorageObject> chunks = objectStorageService.listObjects(getBucketName(), batchId + "/", true);
+
+        // 如果没有找到任何分片，抛出异常提示
         if (chunks.isEmpty()) {
             throw new Exception("找不到任何分片进行合并，批次ID: " + batchId);
         }
+
+        // 将分片对象转为文件路径列表，并根据路径中最后一个 '/' 后的数字部分排序（分片编号）   cf17ce6f77e88fefd44ccb2f0e751967/0
         return chunks.stream()
                 .map(StorageObject::getFilePath)
                 .sorted(Comparator.comparing(s -> Integer.valueOf(s.substring(s.lastIndexOf('/') + 1))))
@@ -178,11 +191,12 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
 
     /**
      * 构建文件元数据
+     *
      * @param mergeRequestDto 包含文件元数据信息的请求DTO
      * @param filePath        文件在存储中的完整路径
      * @return 文件元数据
      */
-    private FileMetadata buildFileMetadata(MergeRequestDto mergeRequestDto,String filePath) {
+    private FileMetadata buildFileMetadata(MergeRequestDto mergeRequestDto, String filePath) {
         FileMetadata metadata = new FileMetadata();
         metadata.setFolderPath(mergeRequestDto.getFolderPath());
         metadata.setFilePath(filePath);

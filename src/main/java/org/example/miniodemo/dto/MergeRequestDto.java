@@ -12,7 +12,7 @@ public class MergeRequestDto {
      */
     String folderPath = "default";
     /**
-     * 标识本次上传任务的唯一批次ID。
+     * 标识本次上传任务的唯一批次ID，前端通常采用hash。
      */
     private String batchId;
     /**

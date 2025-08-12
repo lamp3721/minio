@@ -54,11 +54,16 @@ public class PrivateFileServiceImpl extends AbstractChunkedFileServiceImpl imple
     protected StorageType getStorageType() {
         return StorageType.PRIVATE;
     }
-    
+
     /**
-     * 列出私有存储桶中所有最终合并完成的文件。
+     * 列出所有私有存储的文件详情。
+     * <p>
+     * 从数据库中查询指定存储类型下所有文件的元数据，
+     * 并转换为文件详情 DTO 列表返回。
+     * <p>
+     * 注意：私有文件不会生成访问 URL，因此返回的 DTO 中不包含 URL 信息。
      *
-     * @return 包含文件详细信息的DTO ({@link FileDetailDto}) 列表。
+     * @return 包含文件名、路径、大小、内容类型和访问次数的文件详情列表
      */
     @Override
     public List<FileDetailDto> listPrivateFiles() {
@@ -98,16 +103,21 @@ public class PrivateFileServiceImpl extends AbstractChunkedFileServiceImpl imple
     }
 
     /**
-     * 获取用于代理下载的私有文件输入流。
+     * 下载私有存储中的文件并异步更新该文件的最后访问时间。
      *
-     * @param filePath 文件的对象路径。
-     * @return 文件的输入流。
-     * @throws Exception 如果下载时出错。
+     * <p>方法首先异步触发对文件最后访问时间的更新，保证访问记录及时刷新，
+     * 随后调用对象存储服务下载指定路径的文件数据流。
+     *
+     * @param filePath 文件在存储桶中的相对路径。
+     * @return 返回文件内容的输入流。
+     * @throws Exception 当下载过程中发生异常时抛出。
      */
     @Override
     public InputStream downloadPrivateFile(String filePath) throws Exception {
-        // 异步更新最后访问时间
+        // 异步更新文件最后访问时间，避免阻塞下载操作
         asyncFileService.updateLastAccessedTime(filePath);
+        // 从对象存储服务获取文件输入流
         return objectStorageService.download(getBucketName(), filePath);
     }
+
 } 
