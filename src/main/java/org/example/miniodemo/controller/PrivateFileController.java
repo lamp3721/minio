@@ -117,6 +117,8 @@ public class PrivateFileController extends BaseFileController {
 
     /**
      * 通过后端服务器代理下载私有文件。
+     * <p>
+     * todo: 通常不使用，已经有预签名下载 URL
      *
      * @param filePath 需要下载的文件的完整对象路径。
      * @return 包含文件数据流的响应实体 ({@link Resource})。
