@@ -46,7 +46,7 @@ public class PublicAssetController extends BaseFileController {
         try {
             return R.success(publicAssetService.listPublicFiles());
         } catch (Exception e) {
-            log.error("获取公共文件列表失败", e);
+            log.error("获取公共文件列表时出错", e);
             return R.error(ResultCode.INTERNAL_SERVER_ERROR);
         }
     }
@@ -71,7 +71,7 @@ public class PublicAssetController extends BaseFileController {
                 return R.success(new FileExistsDto(false));
             }
         } catch (Exception e) {
-            log.error("检查公共文件失败: {}", e.getMessage(), e);
+            log.error("检查公共文件是否存在时出错: {}", e.getMessage(), e);
             return R.success(new FileExistsDto(false));
         }
     }
@@ -89,8 +89,8 @@ public class PublicAssetController extends BaseFileController {
             String url = publicAssetService.getPublicUrlFor(metadata.getFilePath());
             return R.success(url);
         } catch (Exception e) {
-            log.error("公共库文件合并失败: {}", e.getMessage(), e);
+            log.error("合并公共文件分片时出错: {}", e.getMessage(), e);
             return R.error(ResultCode.MERGE_FAILED, "文件合并失败: " + e.getMessage());
         }
     }
-} 
+}

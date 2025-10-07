@@ -55,7 +55,7 @@ public class MyBatisFileMetadataRepository implements FileMetadataRepository {
 
     @Override
     public Integer update(FileMetadata metadata) {
-        log.info("更新文件元数据：{}", metadata);
+        log.info("正在更新文件元数据：{}", metadata);
         return fileMetadataMapper.updateById(metadata);
     }
-} 
+}

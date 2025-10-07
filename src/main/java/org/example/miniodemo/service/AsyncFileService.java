@@ -32,7 +32,7 @@ public class AsyncFileService {
     public void updateLastAccessedTime(String filePath) {
         String hash = FilePathUtil.extractHashFromPath(filePath);
         if (hash == null) {
-            log.warn("[异步任务] 无法从对象路径中提取哈希值，无法更新访问时间: {}", filePath);
+            log.warn("【异步任务】无法从对象路径中提取哈希值，无法更新访问时间: {}", filePath);
             return;
         }
 
@@ -43,9 +43,9 @@ public class AsyncFileService {
             // 我们将暂时假设 update 方法存在于 repository
             int updatedRows = fileMetadataRepository.update(metadata);
             if (updatedRows > 0) {
-                log.info("[异步任务] 文件 '{}' 的最后访问时间已更新。", filePath);
+                log.info("【异步任务】文件 '{}' 的最后访问时间已更新。", filePath);
             } else {
-                log.warn("[异步任务] 更新文件 '{}' 的最后访问时间失败，未找到对应记录或更新失败。", filePath);
+                log.warn("【异步任务】更新文件 '{}' 的最后访问时间失败，未找到对应记录或更新失败。", filePath);
             }
         });
     }
@@ -61,10 +61,10 @@ public class AsyncFileService {
     public void deleteTemporaryChunks(String batchId, List<String> filePaths, String bucketName) {
         try {
             objectStorageService.delete(bucketName, filePaths);
-            log.info("[异步任务] 成功删除{}库批次 '{}' 的 {} 个临时分片。", bucketName,batchId, filePaths.size());
+            log.info("【异步任务】成功删除{}库批次 '{}' 的 {} 个临时分片。", bucketName,batchId, filePaths.size());
         } catch (Exception e) {
-            log.error("[异步任务] 删除{}库批次 '{}' 的临时分片失败。", bucketName,batchId, e);
+            log.error("【异步任务】删除{}库批次 '{}' 的临时分片失败。", bucketName,batchId, e);
         }
     }
 
-} 
+}

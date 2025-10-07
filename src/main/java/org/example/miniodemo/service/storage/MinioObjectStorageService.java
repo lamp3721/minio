@@ -189,7 +189,7 @@ public class MinioObjectStorageService implements ObjectStorageService {
         // 遍历并记录删除过程中的错误信息
         for (Result<DeleteError> errorResult : errors) {
             DeleteError error = errorResult.get();
-            log.error("批量删除对象时发生错误. Object: {}, Message: {}", error.objectName(), error.message());
+            log.error("批量删除对象时发生错误。对象: {}, 消息: {}", error.objectName(), error.message());
         }
     }
 

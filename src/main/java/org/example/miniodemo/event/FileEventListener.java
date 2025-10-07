@@ -49,7 +49,7 @@ public class FileEventListener {
         } catch (Exception e) {
             log.error("【事件监听 - 元数据】保存元数据失败，将进行重试（如果未达最大次数）。对象: '{}'，错误: {}", metadata.getFilePath(), e.getMessage());
             // 向上抛出异常，以便 @Retryable 能够捕获并触发重试
-            throw new RuntimeException("Failed to save file metadata, triggering retry.", e);
+            throw new RuntimeException("保存文件元数据失败，触发重试。", e);
         }
     }
 
@@ -79,4 +79,4 @@ public class FileEventListener {
         log.info("【事件监听 - 清理】接收到文件合并事件，准备异步清理分片。批次ID: '{}', 存储桶: '{}'", batchId, bucketName);
         asyncFileService.deleteTemporaryChunks(batchId, event.getSourceFilePaths(), bucketName);
     }
-} 
+}
