@@ -80,24 +80,6 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
     }
 
     /**
-     * 获取已上传的分片列表。
-     *
-     * @param batchId 分片上传批次ID。
-     * @return 已上传的分片列表。
-     * @throws Exception 如果查询时出错。
-     */
-    public List<String> getUploadedChunkNumbers(String batchId) throws Exception {
-        List<StorageObject> chunks = objectStorageService.listObjects(
-                getBucketName(),
-                batchId + "/",
-                false
-        );
-        return chunks.stream()
-                .map(StorageObject::getFilePath)
-                .collect(Collectors.toList());
-    }
-
-    /**
      * 合并分片文件。
      * <p>
      * 此方法现在只负责对象存储层面的合并操作，并发布一个 {@link FileMergedEvent} 事件。

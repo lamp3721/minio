@@ -184,11 +184,11 @@ export function useChunkUploader(uploaderConfig) {
     // 步骤 3: 检查已上传的分片，获取断点信息
     let uploadedChunkPaths = [];
     try {
-        const response = await storageService.getUploadedChunks(uploaderConfig, batchId);
-        uploadedChunkPaths = response || [];
-        if (uploadedChunkPaths && uploadedChunkPaths.length > 0) {
-            ElMessage.info(`检测到上次的上传进度，将从断点处继续。`);
-        }
+        // const response = await storageService.getUploadedChunks(uploaderConfig, batchId);
+        // uploadedChunkPaths = response || [];
+        // if (uploadedChunkPaths && uploadedChunkPaths.length > 0) {
+        //     ElMessage.info(`检测到上次的上传进度，将从断点处继续。`);
+        // }
     } catch (e) {
         ElMessage.warning('检查断点失败，将从头开始上传。');
     }

@@ -11,13 +11,9 @@ import org.example.miniodemo.service.impl.AbstractChunkedFileServiceImpl;
 import org.example.miniodemo.service.impl.PrivateFileServiceImpl;
 import org.example.miniodemo.service.impl.PublicAssetServiceImpl;
 import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
-
-import java.util.Collections;
-import java.util.List;
 
 /**
  * 抽象文件控制器，封装了文件上传和管理的通用API端点。
@@ -61,23 +57,6 @@ public abstract class BaseFileController {
         } catch (Exception e) {
             log.error("分片上传失败: {}", e.getMessage(), e);
             return R.error(ResultCode.FILE_UPLOAD_FAILED, "分片上传失败: " + e.getMessage());
-        }
-    }
-
-    /**
-     * 通用的获取已上传分片列表端点，用于断点续传。
-     *
-     * @param batchId 唯一标识本次文件上传任务的批次ID。
-     * @return 包含已上传分片序号列表的响应体。
-     */
-    @GetMapping("/uploaded/chunks")
-    public R<List<String>> getUploadedChunks(@RequestParam("batchId") String batchId) {
-        try {
-            List<String> chunkPaths = getService().getUploadedChunkNumbers(batchId);
-            return R.success(chunkPaths);
-        } catch (Exception e) {
-            log.error("获取已上传分片列表失败: {}", e.getMessage(), e);
-            return R.error(ResultCode.INTERNAL_SERVER_ERROR, Collections.emptyList());
         }
     }
 

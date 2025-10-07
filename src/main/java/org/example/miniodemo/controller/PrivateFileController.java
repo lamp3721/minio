@@ -55,7 +55,7 @@ public class PrivateFileController extends BaseFileController {
             List<FileDetailDto> fileList = privateFileService.listPrivateFiles();
             return R.success(fileList);
         } catch (Exception e) {
-            log.error("获取文件列表失败: {}", e.getMessage(), e);
+            log.error("获取私有文件列表失败: {}", e.getMessage(), e);
             return R.error(ResultCode.INTERNAL_SERVER_ERROR);
         }
     }
@@ -72,7 +72,7 @@ public class PrivateFileController extends BaseFileController {
             boolean exists = privateFileService.checkFileExists(checkRequest.getFileHash()).isPresent();
             return R.success(new FileExistsDto(exists));
         } catch (Exception e) {
-            log.error("检查文件失败: {}", e.getMessage(), e);
+            log.error("检查文件是否存在失败: {}", e.getMessage(), e);
             return R.success(new FileExistsDto(false));
         }
     }
@@ -89,7 +89,7 @@ public class PrivateFileController extends BaseFileController {
             privateFileService.mergeChunks(mergeRequest);
             return R.success("文件合并成功: " + mergeRequest.getFileName());
         } catch (Exception e) {
-            log.error("文件合并失败: {}", e.getMessage(), e);
+            log.error("私有文件分片合并失败: {}", e.getMessage(), e);
             return R.error(ResultCode.MERGE_FAILED, "文件合并失败: " + e.getMessage());
         }
     }
@@ -107,10 +107,10 @@ public class PrivateFileController extends BaseFileController {
             String url = privateFileService.getPresignedPrivateDownloadUrl(safeFilePath);
             return R.success(url);
         } catch (IllegalArgumentException e) {
-            log.warn("检测到无效的文件路径: {}", filePath, e);
+            log.warn("检测到无效的私有文件路径: {}", filePath, e);
             return R.error(ResultCode.BAD_REQUEST, e.getMessage());
         } catch (Exception e) {
-            log.error("获取预签名 URL 失败: {}", e.getMessage(), e);
+            log.error("获取私有文件预签名URL失败: {}", e.getMessage(), e);
             return R.error(ResultCode.FILE_DOWNLOAD_FAILED, "获取 URL 失败: " + e.getMessage());
         }
     }
@@ -139,11 +139,11 @@ public class PrivateFileController extends BaseFileController {
                     .body(new InputStreamResource(inputStream));
 
         } catch (IllegalArgumentException e) {
-            log.warn("检测到无效的文件路径: {}", filePath, e);
+            log.warn("检测到无效的私有文件路径: {}", filePath, e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
         } catch (Exception e) {
-            log.error("文件下载失败: {}", e.getMessage(), e);
+            log.error("私有文件下载失败: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }
-} 
+}
