@@ -71,7 +71,7 @@
 import { ref, onMounted, toRefs } from 'vue';
 import { ElMessage } from 'element-plus';
 import apiClient from '../api';
-import { useChunkUploader } from '../composables/useChunkUploader.js';
+import { useChunkUploader } from '../uploader/useChunkUploader';
 
 // --- 组件 Props 定义 ---
 const props = defineProps({
@@ -245,4 +245,4 @@ onMounted(() => {
     display: flex;
     gap: 15px;
 }
-</style> 
+</style>
