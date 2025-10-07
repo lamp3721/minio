@@ -65,7 +65,7 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
      * @param chunkNumber 分片序号
      * @throws Exception 如果上传分片时发生错误。
      */
-    public void uploadChunk(MultipartFile file, String batchId, Integer chunkNumber) throws Exception {
+    public String uploadChunk(MultipartFile file, String batchId, Integer chunkNumber) throws Exception {
         String filePath = batchId + "/" + chunkNumber;
         try (InputStream inputStream = file.getInputStream()) {
             objectStorageService.upload(
@@ -76,6 +76,7 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
                     file.getContentType()
             );
         }
+        return filePath;
     }
 
     /**
@@ -85,21 +86,14 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
      * @return 已上传的分片列表。
      * @throws Exception 如果查询时出错。
      */
-    public List<Integer> getUploadedChunkNumbers(String batchId) throws Exception {
+    public List<String> getUploadedChunkNumbers(String batchId) throws Exception {
         List<StorageObject> chunks = objectStorageService.listObjects(
                 getBucketName(),
                 batchId + "/",
                 false
         );
         return chunks.stream()
-                .map(chunk -> {
-                    try {
-                        return Integer.parseInt(chunk.getFilePath().substring(chunk.getFilePath().lastIndexOf('/') + 1));
-                    } catch (NumberFormatException e) {
-                        return null;
-                    }
-                })
-                .filter(java.util.Objects::nonNull)
+                .map(StorageObject::getFilePath)
                 .collect(Collectors.toList());
     }
 
@@ -114,7 +108,7 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
      */
     public FileMetadata mergeChunks(MergeRequestDto mergeRequestDto) throws Exception {
         // 1. 列出并排序所有分片  cf17ce6f77e88fefd44ccb2f0e751967/0  加上桶即使完整路径
-        List<String> sourceObjectNames = listAndSortChunks(mergeRequestDto.getBatchId());
+        List<String> sourceObjectNames = listAndSortChunks(mergeRequestDto.getBatchId(), mergeRequestDto.getChunkPaths());
 
         // 2. 构建最终对象路径并合并
         String finalFilePath = FilePathUtil.buildDateBasedPath(mergeRequestDto.getFolderPath(), mergeRequestDto.getFileHash(), mergeRequestDto.getFileName());
@@ -173,7 +167,13 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
      * @return 按分片编号排序后的分片文件路径列表
      * @throws Exception 如果找不到任何分片文件，则抛出异常
      */
-    private List<String> listAndSortChunks(String batchId) throws Exception {
+    private List<String> listAndSortChunks(String batchId, List<String> chunkPaths) throws Exception {
+        if (chunkPaths != null && !chunkPaths.isEmpty()) {
+            return chunkPaths.stream()
+                    .sorted(Comparator.comparing(s -> Integer.valueOf(s.substring(s.lastIndexOf('/') + 1))))
+                    .collect(Collectors.toList());
+        }
+
         // 调用对象存储服务列出该批次目录下所有分片对象，递归查询
         List<StorageObject> chunks = objectStorageService.listObjects(getBucketName(), batchId + "/", true);
 
@@ -208,4 +208,4 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
         metadata.setStorageType(getStorageType());
         return metadata;
     }
-} 
+}

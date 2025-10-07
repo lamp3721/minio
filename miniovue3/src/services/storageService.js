@@ -16,7 +16,7 @@ function checkFile(uploaderConfig, fileHash) {
  * @param {object} uploaderConfig - 上传器配置对象。
  * @param {string} uploaderConfig.apiPrefix - API请求前缀。
  * @param {string} batchId - 上传批次的唯一ID，通常是文件的哈希值。
- * @returns {Promise<number[]>} 已成功上传的分片序号组成的数组。
+ * @returns {Promise<string[]>} 已成功上传的分片序号组成的数组。
  */
 function getUploadedChunks(uploaderConfig, batchId) {
   return apiClient.get(`${uploaderConfig.apiPrefix}/uploaded/chunks`, { params: { batchId } });
@@ -27,7 +27,7 @@ function getUploadedChunks(uploaderConfig, batchId) {
  * @param {object} uploaderConfig - 上传器配置对象。
  * @param {string} uploaderConfig.apiPrefix - API请求前缀。
  * @param {FormData} formData - 包含分片文件(file)、批次ID(batchId)和分片序号(chunkNumber)的表单数据。
- * @returns {Promise<void>} 上传成功则resolve，失败则reject。
+ * @returns {Promise<{chunkNumber: number, chunkPath: string}>} 上传成功则resolve，失败则reject。
  */
 function uploadChunk(uploaderConfig, formData) {
   return apiClient.post(`${uploaderConfig.apiPrefix}/upload/chunk`, formData);
@@ -57,4 +57,4 @@ export const storageService = {
   getUploadedChunks,
   uploadChunk,
   mergeChunks,
-}; 
+};

@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.common.response.R;
 import org.example.miniodemo.common.response.ResultCode;
 import org.example.miniodemo.common.util.PathValidationUtil;
+import org.example.miniodemo.dto.ChunkUploadResponseDto;
 import org.example.miniodemo.service.AbstractChunkedFile;
 import org.example.miniodemo.service.PrivateFileService;
 import org.example.miniodemo.service.impl.AbstractChunkedFileServiceImpl;
@@ -45,7 +46,7 @@ public abstract class BaseFileController {
      * @return 包含操作结果的响应体。
      */
     @PostMapping("/upload/chunk")
-    public R<String> uploadChunk(
+    public R uploadChunk(
             @RequestParam("file") MultipartFile file,
             @RequestParam("batchId") String batchId,
             @RequestParam("chunkNumber") Integer chunkNumber) {
@@ -55,8 +56,8 @@ public abstract class BaseFileController {
         }
 
         try {
-            getService().uploadChunk(file, batchId, chunkNumber);
-            return R.success("分片 " + chunkNumber + " 上传成功");
+            String chunkPath = getService().uploadChunk(file, batchId, chunkNumber);
+            return R.success(new ChunkUploadResponseDto(chunkNumber, chunkPath));
         } catch (Exception e) {
             log.error("分片上传失败: {}", e.getMessage(), e);
             return R.error(ResultCode.FILE_UPLOAD_FAILED, "分片上传失败: " + e.getMessage());
@@ -70,10 +71,10 @@ public abstract class BaseFileController {
      * @return 包含已上传分片序号列表的响应体。
      */
     @GetMapping("/uploaded/chunks")
-    public R<List<Integer>> getUploadedChunks(@RequestParam("batchId") String batchId) {
+    public R<List<String>> getUploadedChunks(@RequestParam("batchId") String batchId) {
         try {
-            List<Integer> chunkNumbers = getService().getUploadedChunkNumbers(batchId);
-            return R.success(chunkNumbers);
+            List<String> chunkPaths = getService().getUploadedChunkNumbers(batchId);
+            return R.success(chunkPaths);
         } catch (Exception e) {
             log.error("获取已上传分片列表失败: {}", e.getMessage(), e);
             return R.error(ResultCode.INTERNAL_SERVER_ERROR, Collections.emptyList());
@@ -83,7 +84,7 @@ public abstract class BaseFileController {
     /**
      * 通用的文件删除端点。
      *
-     * @param fileName 需要删除的文件的完整对象路径。
+     * @param filePath 需要删除的文件的完整对象路径。
      * @return 包含操作结果的响应体。
      */
     @DeleteMapping("/delete")
@@ -103,4 +104,4 @@ public abstract class BaseFileController {
             return R.error(ResultCode.FILE_DELETE_FAILED, "删除失败: " + e.getMessage());
         }
     }
-} 
+}

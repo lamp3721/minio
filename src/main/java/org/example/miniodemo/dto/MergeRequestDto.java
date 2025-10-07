@@ -2,6 +2,8 @@ package org.example.miniodemo.dto;
 
 import lombok.Data;
 
+import java.util.List;
+
 /**
  * 用于封装文件分片合并请求的数据 DTO。
  */
@@ -31,4 +33,9 @@ public class MergeRequestDto {
      * 文件的MIME类型。
      */
     private String contentType;
-} 
+
+    /**
+     * 分片文件临时存储地址
+     */
+    private List<String> chunkPaths;
+}

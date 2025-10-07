@@ -13,10 +13,10 @@ public interface AbstractChunkedFile {
     Optional<FileMetadata> checkFileExists(String fileHash);
 
     // 上传一个分片
-    void uploadChunk(MultipartFile file, String batchId, Integer chunkNumber) throws Exception;
+    String uploadChunk(MultipartFile file, String batchId, Integer chunkNumber) throws Exception;
 
     // 获取已上传的分片列表。
-    List<Integer> getUploadedChunkNumbers(String batchId) throws Exception;
+    List<String> getUploadedChunkNumbers(String batchId) throws Exception;
 
     // 合并分片文件
     FileMetadata mergeChunks(MergeRequestDto mergeRequestDto) throws Exception;
