@@ -23,3 +23,7 @@ cors:
 
 server:
   port: 902
+
+logging:
+  level:
+    root: info
