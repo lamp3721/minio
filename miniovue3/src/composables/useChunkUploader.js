@@ -63,12 +63,12 @@ export function useChunkUploader(uploaderConfig) {
       const spark = new SparkMD5.ArrayBuffer();
       const fileReader = new FileReader();
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-      let currentChunk = 0;
+      let currentChunk = 1;
 
       fileReader.onload = (e) => {
         spark.append(e.target.result);
         currentChunk++;
-        if (currentChunk < totalChunks) {
+        if (currentChunk <= totalChunks) {
           loadNext();
         } else {
           resolve(spark.end());
@@ -77,7 +77,7 @@ export function useChunkUploader(uploaderConfig) {
       fileReader.onerror = () => reject('文件读取失败，无法计算MD5');
 
       const loadNext = () => {
-        const start = currentChunk * CHUNK_SIZE;
+        const start = (currentChunk - 1) * CHUNK_SIZE;
         const end = Math.min(start + CHUNK_SIZE, file.size);
         fileReader.readAsArrayBuffer(file.slice(start, end));
       };
@@ -191,7 +191,7 @@ export function useChunkUploader(uploaderConfig) {
             if (parsedData && Array.isArray(parsedData.chunkPaths)) {
                 chunkPaths = parsedData.chunkPaths;
                 // 从路径数组中恢复已上传的分片索引
-                uploadedChunks = chunkPaths.map((path, index) => path ? index : -1).filter(index => index !== -1);
+                uploadedChunks = chunkPaths.map((path, index) => path ? index + 1 : -1).filter(index => index !== -1);
                 if (uploadedChunks.length > 0) {
                     ElMessage.info(`检测到上次的上传进度，将从断点处继续。`);
                 }
@@ -207,8 +207,8 @@ export function useChunkUploader(uploaderConfig) {
     let uploadedCount = uploadedChunks.length;
     // 根据已有的分片，精确计算已上传的大小
     let totalLoaded = uploadedChunks.reduce((acc, chunkIndex) => {
-        const isLastChunk = chunkIndex === chunkCount - 1;
-        const chunkSize = isLastChunk ? file.size - chunkIndex * CHUNK_SIZE : CHUNK_SIZE;
+        const isLastChunk = chunkIndex === chunkCount;
+        const chunkSize = isLastChunk ? file.size - (chunkIndex - 1) * CHUNK_SIZE : CHUNK_SIZE;
         return acc + chunkSize;
     }, 0);
     
@@ -222,11 +222,11 @@ export function useChunkUploader(uploaderConfig) {
     let lastTotalLoaded = totalLoaded; // 用于计算瞬时速度
     startTimer();
 
-    for (let i = 0; i < chunkCount; i++) {
+    for (let i = 1; i <= chunkCount; i++) {
         // 跳过已上传的分片
         if (uploadedChunks.includes(i)) continue;
 
-        const chunk = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+        const chunk = file.slice((i - 1) * CHUNK_SIZE, i * CHUNK_SIZE);
         const formData = new FormData();
         formData.append('file', chunk);
         formData.append('batchId', batchId);
