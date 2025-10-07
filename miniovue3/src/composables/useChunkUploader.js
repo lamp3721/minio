@@ -181,24 +181,36 @@ export function useChunkUploader(uploaderConfig) {
       return { isSuccess: false };
     }
 
-    // 步骤 3: 检查已上传的分片，获取断点信息
-    let uploadedChunkPaths = [];
-    try {
-        // const response = await storageService.getUploadedChunks(uploaderConfig, batchId);
-        // uploadedChunkPaths = response || [];
-        // if (uploadedChunkPaths && uploadedChunkPaths.length > 0) {
-        //     ElMessage.info(`检测到上次的上传进度，将从断点处继续。`);
-        // }
-    } catch (e) {
-        ElMessage.warning('检查断点失败，将从头开始上传。');
+    // 步骤 3: 检查已上传的分片，获取断点信息 (基于localStorage)
+    let uploadedChunks = [];
+    let chunkPaths = []; // 用于存储分片路径
+    const storedChunkData = localStorage.getItem(batchId);
+    if (storedChunkData) {
+        try {
+            const parsedData = JSON.parse(storedChunkData);
+            if (parsedData && Array.isArray(parsedData.chunkPaths)) {
+                chunkPaths = parsedData.chunkPaths;
+                // 从路径数组中恢复已上传的分片索引
+                uploadedChunks = chunkPaths.map((path, index) => path ? index : -1).filter(index => index !== -1);
+                if (uploadedChunks.length > 0) {
+                    ElMessage.info(`检测到上次的上传进度，将从断点处继续。`);
+                }
+            }
+        } catch (e) {
+            ElMessage.warning('解析本地上传记录失败，将从头开始上传。');
+            localStorage.removeItem(batchId);
+        }
     }
 
     // 步骤 4: 对文件进行切片，并并发上传所有未上传的分片
     const chunkCount = Math.ceil(file.size / CHUNK_SIZE);
-    const uploadedChunks = uploadedChunkPaths.map(path => parseInt(path.substring(path.lastIndexOf('/') + 1)));
     let uploadedCount = uploadedChunks.length;
-    let totalLoaded = uploadedChunks.length * CHUNK_SIZE; // 初始化已上传的总字节数
-    const chunkPaths = [...uploadedChunkPaths]; // 新增：用于存储分片路径
+    // 根据已有的分片，精确计算已上传的大小
+    let totalLoaded = uploadedChunks.reduce((acc, chunkIndex) => {
+        const isLastChunk = chunkIndex === chunkCount - 1;
+        const chunkSize = isLastChunk ? file.size - chunkIndex * CHUNK_SIZE : CHUNK_SIZE;
+        return acc + chunkSize;
+    }, 0);
     
     uploadProgress.value = { 
         percentage: chunkCount > 0 ? Math.floor((uploadedCount / chunkCount) * 100) : 0,
@@ -225,6 +237,9 @@ export function useChunkUploader(uploaderConfig) {
             totalLoaded += chunk.size;
             chunkPaths[response.chunkNumber] = response.chunkPath; // 存储分片路径
             
+            // 保存进度到localStorage
+            localStorage.setItem(batchId, JSON.stringify({ chunkPaths }));
+
             // 更新进度条
             uploadProgress.value = { 
                 percentage: Math.floor((uploadedCount / chunkCount) * 100), 
@@ -263,11 +278,14 @@ export function useChunkUploader(uploaderConfig) {
         fileHash: fileHash,
         fileSize: file.size,
         contentType: file.type,
-        folderPath: uploaderConfig.folderPath || '', // 从配置中读取 folderPath，若无则为空
-        chunkPaths: chunkPaths.filter(p => p), // 新增：发送分片路径列表
+        folderPath: uploaderConfig.folderPath || '', // 从配置中读取 folderPath
+        chunkPaths: chunkPaths.filter(p => p), // 发送分片路径列表
       };
       const result = await storageService.mergeChunks(uploaderConfig, mergeData);
       
+      // 清理localStorage
+      localStorage.removeItem(batchId);
+
       let successMessage = '文件上传成功！';
       uploadProgress.value.status = successMessage;
       uploadProgress.value.percentage = 100; // 确保进度条达到100%
