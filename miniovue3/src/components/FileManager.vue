@@ -32,7 +32,7 @@
         <div class="progress-info">
           <span>{{ uploadStatus }}</span>
           <div class="sub-info">
-            <span v-if="uploadSpeed" class="upload-speed">速度: {{ uploadSpeed }} KB/s</span>
+            <span v-if="uploadSpeed > 0" class="upload-speed">速度: {{ formattedUploadSpeed }}</span>
             <span v-if="elapsedTime" class="elapsed-time">耗时: {{ formattedElapsedTime }}</span>
           </div>
         </div>
@@ -138,6 +138,7 @@ const loading = ref(false);
 const {
   uploadProgress, // 上传进度值
   uploadSpeed,    // 上传速度
+  formattedUploadSpeed, // 格式化后的上传速度
   elapsedTime,    // 已耗时
   formattedElapsedTime, // 格式化后的耗时
   uploadStatus,   // 上传状态文本

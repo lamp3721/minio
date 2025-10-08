@@ -122,7 +122,12 @@ export const handleFileUpload = async (file, uploaderConfig, callbacks = {}) => 
             chunkPaths[response.chunkNumber - 1] = response.chunkPath;
             localStorage.setItem(batchId, JSON.stringify({ chunkPaths }));
             // 触发进度更新回调
-            onProgress?.({ percentage: Math.floor((uploadedCount / chunkCount) * 100), status: `正在上传分片: ${uploadedCount} / ${chunkCount}` });
+            const totalUploadedBytes = uploadedCount * CHUNK_SIZE;
+            onProgress?.({
+                percentage: Math.floor((uploadedCount / chunkCount) * 100),
+                status: `正在上传分片: ${uploadedCount} / ${chunkCount}`,
+                totalUploadedBytes: totalUploadedBytes > file.size ? file.size : totalUploadedBytes // 确保不超过文件总大小
+            });
         });
         uploadPromises.push(promise);
     }

@@ -51,7 +51,31 @@ export function useChunkUploader(uploaderConfig) {
      */
     let timer = null;
 
+    /**
+     * @description 上一次进度更新的时间点。
+     * @type {number|null}
+     */
+    let lastProgressTime = null;
+
+    /**
+     * @description 上一次已上传的字节数。
+     * @type {number}
+     */
+    let lastUploadedBytes = 0;
+
     // --- 计算属性 ---
+
+    /**
+     * @description 格式化后的上传速度，自动在 KB/s 和 MB/s 之间切换。
+     * @type {import('vue').ComputedRef<string>}
+     */
+    const formattedUploadSpeed = computed(() => {
+        if (!uploadSpeed.value || uploadSpeed.value < 0) return '0 KB/s';
+        if (uploadSpeed.value < 1024) {
+            return `${uploadSpeed.value.toFixed(1)} KB/s`;
+        }
+        return `${(uploadSpeed.value / 1024).toFixed(2)} MB/s`;
+    });
 
     /**
      * @description 格式化后的已用时间，例如：'00:01:23'。
@@ -71,6 +95,9 @@ export function useChunkUploader(uploaderConfig) {
      */
     const startTimer = () => {
         stopTimer(); // 先停止任何可能存在的计时器
+        elapsedTime.value = 0; // 重置耗时
+        lastProgressTime = Date.now(); // 记录开始时间
+        lastUploadedBytes = 0; // 重置已上传字节
         timer = setInterval(() => {
             elapsedTime.value++;
         }, 1000);
@@ -129,12 +156,30 @@ export function useChunkUploader(uploaderConfig) {
                 fileHash.value = hash;
                 uploadStatus.value = '哈希计算完成，准备上传...';
             },
-            onProgress: ({ percentage, status }) => {
+            onProgress: ({ percentage, status, totalUploadedBytes }) => {
                 if (percentage !== undefined) uploadProgress.value = percentage;
                 if (status) uploadStatus.value = status;
+
+                // --- 上传速度计算 ---
+                const now = Date.now();
+                if (totalUploadedBytes && lastProgressTime) {
+                    const timeDiff = (now - lastProgressTime) / 1000; // 秒
+                    if (timeDiff > 0.5) { // 每隔0.5秒以上更新一次速度
+                        const bytesDiff = totalUploadedBytes - lastUploadedBytes;
+                        const speed = bytesDiff / timeDiff / 1024; // KB/s
+                        uploadSpeed.value = Math.round(speed);
+                        lastProgressTime = now;
+                        lastUploadedBytes = totalUploadedBytes;
+                    }
+                } else if (totalUploadedBytes) {
+                    // 第一次进度更新，初始化时间和字节
+                    lastProgressTime = now;
+                    lastUploadedBytes = totalUploadedBytes;
+                }
             },
             onUploadComplete: () => {
                 isUploading.value = false;
+                uploadSpeed.value = 0; // 上传完成，速度归零
                 stopTimer();
             },
         };
@@ -153,6 +198,7 @@ export function useChunkUploader(uploaderConfig) {
         isUploading,
         uploadProgress,
         uploadSpeed,
+        formattedUploadSpeed, // 导出格式化后的速度
         elapsedTime,
         formattedElapsedTime,
         fileHash,
