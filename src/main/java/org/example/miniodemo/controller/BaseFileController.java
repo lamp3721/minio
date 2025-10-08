@@ -5,6 +5,7 @@ import org.example.miniodemo.common.response.R;
 import org.example.miniodemo.common.response.ResultCode;
 import org.example.miniodemo.common.util.PathValidationUtil;
 import org.example.miniodemo.dto.ChunkUploadResponseDto;
+import org.example.miniodemo.dto.FileUploadDto;
 import org.example.miniodemo.service.AbstractChunkedFile;
 import org.example.miniodemo.service.PrivateFileService;
 import org.example.miniodemo.service.impl.AbstractChunkedFileServiceImpl;
@@ -12,6 +13,7 @@ import org.example.miniodemo.service.impl.PrivateFileServiceImpl;
 import org.example.miniodemo.service.impl.PublicAssetServiceImpl;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -83,4 +85,6 @@ public abstract class BaseFileController {
             return R.error(ResultCode.FILE_DELETE_FAILED, "删除失败: " + e.getMessage());
         }
     }
+
+    public abstract R uploadFile(MultipartFile file, FileUploadDto fileUploadDto);
 }

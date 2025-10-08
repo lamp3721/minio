@@ -111,7 +111,7 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
         }
 
         // 3. 构建元数据对象
-        FileMetadata metadata = buildFileMetadata(mergeRequestDto, finalFilePath);
+        FileMetadata metadata = this.buildFileMetadata(mergeRequestDto, finalFilePath);
 
         // 4. 发布文件合并成功事件
         FileMergedEvent event = new FileMergedEvent(this, metadata, mergeRequestDto.getBatchId(), sourceObjectNames);
@@ -145,6 +145,57 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
 
 
     // --- 私有辅助方法 ---
+
+    /**
+     * 直接上传单个文件，适用于小文件。
+     *
+     * @param file     上传的文件
+     * @param fileHash 文件的哈希值
+     * @return 文件的元数据
+     * @throws Exception 上传过程中发生错误
+     */
+    @Override
+    @Transactional
+    public FileMetadata uploadFile(String folderPath,MultipartFile file, String fileHash) throws Exception {
+        log.info("【直接上传 - {}】开始处理直接上传请求，文件名: {}，哈希: {}", getStorageType(), file.getOriginalFilename(), fileHash);
+
+        // 1. 构建最终对象路径
+        String finalFilePath = FilePathUtil.buildDateBasedPath(folderPath, fileHash, file.getOriginalFilename());
+        log.debug("【直接上传 - {}】构建最终文件路径: {}", getStorageType(), finalFilePath);
+
+        // 2. 上传文件到对象存储
+        try (InputStream inputStream = file.getInputStream()) {
+            objectStorageService.upload(
+                    getBucketName(),
+                    finalFilePath,
+                    inputStream,
+                    file.getSize(),
+                    file.getContentType()
+            );
+            log.info("【直接上传 - {}】文件已成功上传到对象存储。最终对象: '{}'。", getStorageType(), finalFilePath);
+        } catch (Exception e) {
+            log.error("【直接上传 - {}】文件上传到对象存储时失败。最终对象: '{}'。", getStorageType(), finalFilePath, e);
+            throw new Exception("文件上传失败", e);
+        }
+
+        // 3. 构建并保存文件元数据
+        FileMetadata metadata = new FileMetadata();
+        metadata.setFolderPath(folderPath);
+        metadata.setFilePath(finalFilePath);
+        metadata.setOriginalFilename(file.getOriginalFilename());
+        metadata.setFileSize(file.getSize());
+        metadata.setContentType(file.getContentType());
+        metadata.setContentHash(fileHash);
+        metadata.setBucketName(getBucketName());
+        metadata.setStorageType(getStorageType());
+
+        fileMetadataRepository.save(metadata);
+        log.info("【直接上传 - {}】文件元数据已成功保存到数据库。最终对象路径: '{}'。", getStorageType(), finalFilePath);
+
+        return metadata;
+    }
+
+
 
 
 

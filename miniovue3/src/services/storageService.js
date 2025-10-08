@@ -35,6 +35,21 @@ function mergeChunks(uploaderConfig, mergeData) {
 }
 
 /**
+ * @description 直接上传单个文件。
+ * @param {object} uploaderConfig - 上传器配置对象。
+ * @param {string} uploaderConfig.apiPrefix - API请求前缀。
+ * @param {FormData} formData - 包含文件和DTO的表单数据。
+ * @returns {Promise<object>} 后端返回的上传结果。
+ */
+function uploadFile(uploaderConfig, formData) {
+    return apiClient.post(`${uploaderConfig.apiPrefix}/upload/file`, formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+    });
+}
+
+/**
  * @description 封装了所有与后端文件存储API交互的服务模块。
  * 这个模块是纯粹的数据逻辑层，不涉及任何UI或组件状态。
  * @property {Function} checkFile - 检查文件是否存在。
@@ -45,4 +60,5 @@ export const storageService = {
   checkFile,
   uploadChunk,
   mergeChunks,
+  uploadFile,
 };

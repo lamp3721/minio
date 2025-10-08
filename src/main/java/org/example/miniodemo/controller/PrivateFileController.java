@@ -8,6 +8,7 @@ import org.example.miniodemo.common.util.PathValidationUtil;
 import org.example.miniodemo.dto.CheckRequestDto;
 import org.example.miniodemo.dto.FileDetailDto;
 import org.example.miniodemo.dto.FileExistsDto;
+import org.example.miniodemo.dto.FileUploadDto;
 import org.example.miniodemo.dto.MergeRequestDto;
 import org.example.miniodemo.service.PrivateFileService;
 import org.example.miniodemo.service.impl.AbstractChunkedFileServiceImpl;
@@ -18,6 +19,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.net.URLEncoder;
@@ -144,6 +146,30 @@ public class PrivateFileController extends BaseFileController {
         } catch (Exception e) {
             log.error("私有文件下载失败: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+
+    /**
+     * 直接上传单个私有文件。
+     *
+     * @param file          上传的文件
+     * @param fileUploadDto 包含文件元数据（如哈希）的 DTO。
+     * @return 包含操作结果的响应体。
+     */
+    @Override
+    @PostMapping("/upload/file")
+    public R uploadFile(@RequestParam("file") MultipartFile file, @RequestPart("dto") FileUploadDto fileUploadDto) {
+        if (file.isEmpty() || fileUploadDto.getFileHash().isBlank()) {
+            log.warn("【直接上传-私有】请求缺少文件或文件哈希");
+            return R.error(ResultCode.BAD_REQUEST, "文件和文件哈希不能为空");
+        }
+
+        try {
+            log.info("【直接上传-私有】接收到文件上传请求: 文件名 [{}], 哈希 [{}]", file.getOriginalFilename(), fileUploadDto.getFileHash());
+            return R.success(getService().uploadFile(fileUploadDto.getFolderPath(),file, fileUploadDto.getFileHash()));
+        } catch (Exception e) {
+            log.error("【直接上传-私有】文件上传失败: {}", e.getMessage(), e);
+            return R.error(ResultCode.FILE_UPLOAD_FAILED, "文件上传失败: " + e.getMessage());
         }
     }
 }

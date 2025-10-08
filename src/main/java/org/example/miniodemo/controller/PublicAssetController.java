@@ -8,11 +8,13 @@ import org.example.miniodemo.domain.FileMetadata;
 import org.example.miniodemo.dto.CheckRequestDto;
 import org.example.miniodemo.dto.FileDetailDto;
 import org.example.miniodemo.dto.FileExistsDto;
+import org.example.miniodemo.dto.FileUploadDto;
 import org.example.miniodemo.dto.MergeRequestDto;
 import org.example.miniodemo.service.PublicAssetService;
 import org.example.miniodemo.service.impl.AbstractChunkedFileServiceImpl;
 import org.example.miniodemo.service.impl.PublicAssetServiceImpl;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Optional;
@@ -91,6 +93,33 @@ public class PublicAssetController extends BaseFileController {
         } catch (Exception e) {
             log.error("合并公共文件分片时出错: {}", e.getMessage(), e);
             return R.error(ResultCode.MERGE_FAILED, "文件合并失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 直接上传单个公共文件，并返回其公开访问URL。
+     *
+     * @param file          上传的文件
+     * @param fileUploadDto 包含文件元数据（如哈希）的 DTO。
+     * @return 包含文件公开URL的响应体
+     */
+    @Override
+    @PostMapping("/upload/file")
+    public R uploadFile(@RequestParam("file") MultipartFile file, @RequestPart("dto") FileUploadDto fileUploadDto) {
+        if (file.isEmpty() || fileUploadDto.getFileHash().isBlank()) {
+            log.warn("【直接上传-公共】请求缺少文件或文件哈希");
+            return R.error(ResultCode.BAD_REQUEST, "文件和文件哈希不能为空");
+        }
+
+        try {
+            log.info("【直接上传-公共】接收到文件上传请求: 文件名 [{}], 哈希 [{}]", file.getOriginalFilename(), fileUploadDto.getFileHash());
+            FileMetadata metadata = getService().uploadFile(fileUploadDto.getFolderPath(),file, fileUploadDto.getFileHash());
+            String url = publicAssetService.getPublicUrlFor(metadata.getFilePath());
+            log.info("【直接上传-公共】文件上传成功，公开URL: {}", url);
+            return R.success(url);
+        } catch (Exception e) {
+            log.error("【直接上传-公共】文件上传失败: {}", e.getMessage(), e);
+            return R.error(ResultCode.FILE_UPLOAD_FAILED, "文件上传失败: " + e.getMessage());
         }
     }
 }

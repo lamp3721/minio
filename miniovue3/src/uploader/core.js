@@ -65,6 +65,34 @@ export const handleFileUpload = async (file, uploaderConfig, callbacks = {}) => 
         return { isSuccess: false };
     }
 
+    // 如果文件小于分片大小，则直接上传
+    if (file.size < CHUNK_SIZE) {
+        try {
+            onProgress?.({ percentage: 0, status: '文件较小，正在直接上传...' });
+            const formData = new FormData();
+            const dto = {
+                folderPath: uploaderConfig.folderPath || '',
+                fileName: file.name,
+                fileHash: fileHash,
+                fileSize: file.size,
+                contentType: file.type,
+            };
+            formData.append('file', file);
+            formData.append('dto', new Blob([JSON.stringify(dto)], { type: 'application/json' }));
+
+            const result = await storageService.uploadFile(uploaderConfig, formData);
+            onProgress?.({ percentage: 100, status: '文件上传成功！' });
+            onUploadComplete?.();
+            return { isSuccess: true, gracefulResetNeeded: true, fileUrl: result };
+        } catch (error) {
+            console.error('Direct file upload failed:', error);
+            onProgress?.({ status: `直接上传失败: ${error.message}` });
+            onUploadComplete?.();
+            return { isSuccess: false };
+        }
+    }
+
+
     // 使用文件哈希作为上传批次ID
     const batchId = fileHash;
 
