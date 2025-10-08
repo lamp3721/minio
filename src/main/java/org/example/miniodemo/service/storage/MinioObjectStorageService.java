@@ -214,4 +214,15 @@ public class MinioObjectStorageService implements ObjectStorageService {
                         .build()
         );
     }
+
+    @Override
+    public String getPublicUrl(String bucketName, String filePath) throws Exception {
+        return internalMinioClient.getPresignedObjectUrl(
+                GetPresignedObjectUrlArgs.builder()
+                        .method(Method.GET)
+                        .bucket(bucketName)
+                        .object(filePath)
+                        .build()
+        );
+    }
 }
