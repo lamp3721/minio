@@ -86,11 +86,19 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
      * 后续的数据库持久化和分片清理将由事件监听器异步处理。
      *
      * @return 合并后的文件元数据（此时尚未持久化）。
-     * @throws Exception 如果列出或合并分片时发生错误。
+     * @throws Exception 如果分片列表为空或合并失败。
      */
     public FileMetadata mergeChunks(MergeRequestDto mergeRequestDto) throws Exception {
-        // 1. 列出并排序所有分片  cf17ce6f77e88fefd44ccb2f0e751967/0  加上桶即使完整路径
-        List<String> sourceObjectNames = listAndSortChunks(mergeRequestDto.getBatchId(), mergeRequestDto.getChunkPaths());
+        // 1. 分片  cf17ce6f77e88fefd44ccb2f0e751967/0  加上桶即使完整路径
+        // 1. 从DTO获取分片路径并按编号排序
+        List<String> sourceObjectNames = mergeRequestDto.getChunkPaths().stream()
+                .sorted(Comparator.comparing(s -> Integer.parseInt(s.substring(s.lastIndexOf('/') + 1))))
+                .collect(Collectors.toList());
+
+        // 如果分片列表为空，则抛出异常
+        if (sourceObjectNames.isEmpty()) {
+            throw new Exception("分片列表为空，无法合并。批次ID: " + mergeRequestDto.getBatchId());
+        }
 
         // 2. 构建最终对象路径并合并
         String finalFilePath = FilePathUtil.buildDateBasedPath(mergeRequestDto.getFolderPath(), mergeRequestDto.getFileHash(), mergeRequestDto.getFileName());
@@ -139,37 +147,7 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
     // --- 私有辅助方法 ---
 
 
-    /**
-     * 列出指定批次ID下的所有分片对象，并按分片编号进行排序。
-     * <p>
-     * 该方法会调用对象存储服务，获取批次目录下的所有文件（分片），
-     * 并根据文件名中最后的数字（假设为分片编号）进行升序排序，方便后续合并操作。
-     *
-     * @param batchId 批次ID，对应存储桶中的目录前缀
-     * @return 按分片编号排序后的分片文件路径列表
-     * @throws Exception 如果找不到任何分片文件，则抛出异常
-     */
-    private List<String> listAndSortChunks(String batchId, List<String> chunkPaths) throws Exception {
-        if (chunkPaths != null && !chunkPaths.isEmpty()) {
-            return chunkPaths.stream()
-                    .sorted(Comparator.comparing(s -> Integer.valueOf(s.substring(s.lastIndexOf('/') + 1))))
-                    .collect(Collectors.toList());
-        }
 
-        // 调用对象存储服务列出该批次目录下所有分片对象，递归查询
-        List<StorageObject> chunks = objectStorageService.listObjects(getBucketName(), batchId + "/", true);
-
-        // 如果没有找到任何分片，抛出异常提示
-        if (chunks.isEmpty()) {
-            throw new Exception("找不到任何分片进行合并，批次ID: " + batchId);
-        }
-
-        // 将分片对象转为文件路径列表，并根据路径中最后一个 '/' 后的数字部分排序（分片编号）   cf17ce6f77e88fefd44ccb2f0e751967/0
-        return chunks.stream()
-                .map(StorageObject::getFilePath)
-                .sorted(Comparator.comparing(s -> Integer.valueOf(s.substring(s.lastIndexOf('/') + 1))))
-                .collect(Collectors.toList());
-    }
 
     /**
      * 构建文件元数据
