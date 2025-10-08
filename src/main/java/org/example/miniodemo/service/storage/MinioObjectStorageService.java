@@ -6,6 +6,7 @@ import io.minio.messages.DeleteError;
 import io.minio.messages.DeleteObject;
 import io.minio.messages.Item;
 import lombok.extern.slf4j.Slf4j;
+import org.example.miniodemo.config.MinioConfig;
 import org.example.miniodemo.domain.StorageObject;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -35,6 +36,7 @@ public class MinioObjectStorageService implements ObjectStorageService {
      * 公网访问的 MinIO 客户端，主要用于生成对外公开的访问链接（预签名 URL）。
      */
     private final MinioClient publicMinioClient;
+    private final MinioConfig minioConfig;
 
     /**
      * 构造方法，注入两个不同配置的 MinIO 客户端实例。
@@ -43,9 +45,11 @@ public class MinioObjectStorageService implements ObjectStorageService {
      */
     public MinioObjectStorageService(
             @Qualifier("internalMinioClient") MinioClient internalMinioClient,
-            @Qualifier("publicMinioClient") MinioClient publicMinioClient) {
+            @Qualifier("publicMinioClient") MinioClient publicMinioClient,
+            MinioConfig minioConfig) {
         this.internalMinioClient = internalMinioClient;
         this.publicMinioClient = publicMinioClient;
+        this.minioConfig = minioConfig;
     }
 
     /**
@@ -216,13 +220,7 @@ public class MinioObjectStorageService implements ObjectStorageService {
     }
 
     @Override
-    public String getPublicUrl(String bucketName, String filePath) throws Exception {
-        return internalMinioClient.getPresignedObjectUrl(
-                GetPresignedObjectUrlArgs.builder()
-                        .method(Method.GET)
-                        .bucket(bucketName)
-                        .object(filePath)
-                        .build()
-        );
+    public String getPublicUrl(String bucketName, String filePath) {
+        return minioConfig.getPublicEndpoint() + "/" + bucketName + "/" + filePath;
     }
 }

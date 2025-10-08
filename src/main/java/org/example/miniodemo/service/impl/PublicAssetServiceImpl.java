@@ -2,7 +2,6 @@ package org.example.miniodemo.service.impl;
 
 import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.config.MinioBucketConfig;
-import org.example.miniodemo.config.MinioConfig;
 import org.example.miniodemo.domain.FileMetadata;
 import org.example.miniodemo.domain.StorageType;
 import org.example.miniodemo.dto.FileDetailDto;
@@ -29,17 +28,14 @@ import java.util.stream.Collectors;
 public class PublicAssetServiceImpl extends AbstractChunkedFileServiceImpl implements PublicAssetService {
 
     private final MinioBucketConfig bucketConfig;
-    private final MinioConfig minioConfig;
 
     public PublicAssetServiceImpl(ObjectStorageService objectStorageService,
                                   FileMetadataRepository fileMetadataRepository,
                                   AsyncFileService asyncFileService,
                                   EventPublisher eventPublisher,
-                                  MinioBucketConfig bucketConfig,
-                                  MinioConfig minioConfig) {
+                                  MinioBucketConfig bucketConfig) {
         super(objectStorageService, fileMetadataRepository, asyncFileService, eventPublisher);
         this.bucketConfig = bucketConfig;
-        this.minioConfig = minioConfig;
     }
 
     @Override
@@ -60,7 +56,12 @@ public class PublicAssetServiceImpl extends AbstractChunkedFileServiceImpl imple
      */
     @Override
     public String getPublicUrlFor(String objectName) {
-        return minioConfig.getPublicEndpoint() + "/" + getBucketName() + "/" + objectName;
+        try {
+            return objectStorageService.getPublicUrl(getBucketName(), objectName);
+        } catch (Exception e) {
+            log.error("Error generating public URL for object: {}", objectName, e);
+            return ""; // Or handle error as appropriate
+        }
     }
 
     /**

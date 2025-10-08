@@ -41,28 +41,15 @@ const uploaderConfig = {
  * @description 处理"下载"按钮的点击事件。
  * @param {object} row - 当前行数据。
  */
-const handleDownload = async (row) => {
-  const loadingMessage = ElMessage.info({
-    message: '正在生成下载链接...',
-    duration: 0, // 持续显示直到手动关闭
-  });
-  try {
-    // 从后端获取一个带签名的临时下载URL
-    const url = await apiClient.get('/private/download-url', { params: { filePath: row.filePath } });
-    loadingMessage.close(); // 获取到URL后立即关闭加载提示
-
-    // 使用动态创建的<a>标签来触发浏览器下载
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', row.name); // 设置下载文件名
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    ElMessage.success('文件已开始下载...');
-  } catch (error) {
-    loadingMessage.close(); // 出错时也要关闭加载提示
-    console.error("下载失败:", error); // API拦截器会处理面向用户的错误消息
-  }
+const handleDownload = (row) => {
+  // 使用动态创建的<a>标签来触发浏览器下载
+  const link = document.createElement('a');
+  link.href = row.url;
+  link.setAttribute('download', row.name); // 设置下载文件名
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  ElMessage.success('文件已开始下载...');
 };
 
 /**
@@ -70,20 +57,13 @@ const handleDownload = async (row) => {
  * @param {object} row - 当前行数据。
  */
 const handleCopyLink = async (row) => {
-  const loadingMessage = ElMessage.info({
-    message: '正在生成临时下载链接...',
-    duration: 0,
-  });
   try {
-    // 从后端获取一个带签名的临时下载URL
-    const url = await apiClient.get('/private/download-url', { params: { filePath: row.filePath } });
     // 将URL复制到剪贴板
-    await navigator.clipboard.writeText(url);
-    loadingMessage.close();
+    await navigator.clipboard.writeText(row.url);
     ElMessage.success('临时下载链接已复制到剪贴板！');
   } catch (error) {
-    loadingMessage.close();
     console.error("复制链接失败:", error);
+    ElMessage.error('复制链接失败！');
   }
 };
 
@@ -109,4 +89,4 @@ const handleDelete = async (row, fetchFileList) => {
     }
   }
 };
-</script> 
+</script>

@@ -71,13 +71,23 @@ public class PrivateFileServiceImpl extends AbstractChunkedFileServiceImpl imple
 
         return metadataList.stream()
                 .filter(Objects::nonNull)
-                .map(metadata -> FileDetailDto.builder()
-                        .name(metadata.getOriginalFilename())
-                        .filePath(metadata.getFilePath())
-                        .size(metadata.getFileSize())
-                        .contentType(metadata.getContentType())
-                        .visitCount(metadata.getVisitCount())
-                        .build()) // 私有文件不生成URL
+                .map(metadata -> {
+                    try {
+                        String url = getPresignedPrivateDownloadUrl(metadata.getFilePath());
+                        return FileDetailDto.builder()
+                                .name(metadata.getOriginalFilename())
+                                .filePath(metadata.getFilePath())
+                                .size(metadata.getFileSize())
+                                .contentType(metadata.getContentType())
+                                .visitCount(metadata.getVisitCount())
+                                .url(url)
+                                .build();
+                    } catch (Exception e) {
+                        log.error("获取文件 {} 的预签名URL失败", metadata.getFilePath(), e);
+                        return null; // 或者返回一个不带URL的DTO
+                    }
+                })
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
     }
 
@@ -120,4 +130,4 @@ public class PrivateFileServiceImpl extends AbstractChunkedFileServiceImpl imple
         return objectStorageService.download(getBucketName(), filePath);
     }
 
-} 
+}
