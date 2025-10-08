@@ -2,6 +2,7 @@ package org.example.miniodemo.service.impl;
 
 import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.config.MinioBucketConfig;
+import org.example.miniodemo.config.MinioConfig;
 import org.example.miniodemo.domain.FileMetadata;
 import org.example.miniodemo.domain.StorageType;
 import org.example.miniodemo.dto.FileDetailDto;
@@ -28,14 +29,17 @@ import java.util.stream.Collectors;
 public class PublicAssetServiceImpl extends AbstractChunkedFileServiceImpl implements PublicAssetService {
 
     private final MinioBucketConfig bucketConfig;
+    private final MinioConfig minioConfig;
 
     public PublicAssetServiceImpl(ObjectStorageService objectStorageService,
                                   FileMetadataRepository fileMetadataRepository,
                                   AsyncFileService asyncFileService,
                                   EventPublisher eventPublisher,
-                                  MinioBucketConfig bucketConfig) {
+                                  MinioBucketConfig bucketConfig,
+                                  MinioConfig minioConfig) {
         super(objectStorageService, fileMetadataRepository, asyncFileService, eventPublisher);
         this.bucketConfig = bucketConfig;
+        this.minioConfig = minioConfig;
     }
 
     @Override
@@ -48,20 +52,14 @@ public class PublicAssetServiceImpl extends AbstractChunkedFileServiceImpl imple
         return StorageType.PUBLIC;
     }
 
-    /**
-     * 为给定的对象名生成公开访问URL。
-     *
-     * @param objectName MinIO中的对象路径。
-     * @return 完整的、可公开访问的URL。
-     */
     @Override
-    public String getPublicUrlFor(String objectName) {
-        try {
-            return objectStorageService.getPublicUrl(getBucketName(), objectName);
-        } catch (Exception e) {
-            log.error("Error generating public URL for object: {}", objectName, e);
-            return ""; // Or handle error as appropriate
-        }
+    public String getPublicUrl(String bucketName, String filePath) {
+        return minioConfig.getPublicEndpoint() + "/" + bucketName + "/" + filePath;
+    }
+
+    @Override
+    public String getPublicUrl(String filePath) {
+        return getPublicUrl(getBucketName(), filePath);
     }
 
     /**
@@ -82,7 +80,7 @@ public class PublicAssetServiceImpl extends AbstractChunkedFileServiceImpl imple
                         .name(metadata.getOriginalFilename())
                         .filePath(metadata.getFilePath())
                         .size(metadata.getFileSize())
-                        .url(getPublicUrlFor(metadata.getFilePath()))  // 生成文件的公网访问URL
+                        .url(getPublicUrl(getBucketName(), metadata.getFilePath()))  // 生成文件的公网访问URL
                         .contentType(metadata.getContentType())
                         .build())
                 .collect(Collectors.toList());

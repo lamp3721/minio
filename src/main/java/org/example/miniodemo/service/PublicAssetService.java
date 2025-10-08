@@ -6,8 +6,22 @@ import java.util.List;
 
 public interface PublicAssetService extends AbstractChunkedFile{
 
-    // 为给定的对象名生成公开访问URL
-    String getPublicUrlFor(String objectName);
+    /**
+     * 获取公共存储桶中对象的永久访问URL。
+     *
+     * @param bucketName 存储桶名称。
+     * @param filePath   对象名称。
+     * @return 对象的可直接访问的URL。
+     */
+    String getPublicUrl(String bucketName, String filePath);
+
+    /**
+     * 获取公共存储桶中对象的永久访问URL。
+     *
+     * @param filePath   对象名称。
+     * @return 对象的可直接访问的URL。
+     */
+    String getPublicUrl(String filePath);
 
     // 获取公共存储桶中所有文件的列表。
     List<FileDetailDto> listPublicFiles();

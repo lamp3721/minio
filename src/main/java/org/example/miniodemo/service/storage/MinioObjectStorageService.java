@@ -218,9 +218,4 @@ public class MinioObjectStorageService implements ObjectStorageService {
                         .build()
         );
     }
-
-    @Override
-    public String getPublicUrl(String bucketName, String filePath) {
-        return minioConfig.getPublicEndpoint() + "/" + bucketName + "/" + filePath;
-    }
 }

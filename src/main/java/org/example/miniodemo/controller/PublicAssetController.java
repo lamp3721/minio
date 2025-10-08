@@ -67,7 +67,7 @@ public class PublicAssetController extends BaseFileController {
             Optional<FileMetadata> metadataOptional = publicAssetService.checkFileExists(checkRequest.getFileHash());
             if (metadataOptional.isPresent()) {
                 FileMetadata metadata = metadataOptional.get();
-                String url = publicAssetService.getPublicUrlFor(metadata.getFilePath());
+                String url = publicAssetService.getPublicUrl(metadata.getFilePath());
                 return R.success(new FileExistsDto(true, url));
             } else {
                 return R.success(new FileExistsDto(false));
@@ -88,7 +88,7 @@ public class PublicAssetController extends BaseFileController {
     public R<String> mergePublicChunks(@RequestBody MergeRequestDto mergeRequest) {
         try {
             FileMetadata metadata = publicAssetService.mergeChunks(mergeRequest);
-            String url = publicAssetService.getPublicUrlFor(metadata.getFilePath());
+            String url = publicAssetService.getPublicUrl(metadata.getFilePath());
             return R.success(url);
         } catch (Exception e) {
             log.error("合并公共文件分片时出错: {}", e.getMessage(), e);
@@ -114,7 +114,7 @@ public class PublicAssetController extends BaseFileController {
         try {
             log.info("【直接上传-公共】接收到文件上传请求: 文件名 [{}], 哈希 [{}]", file.getOriginalFilename(), fileUploadDto.getFileHash());
             FileMetadata metadata = getService().uploadFile(fileUploadDto.getFolderPath(),file, fileUploadDto.getFileHash());
-            String url = publicAssetService.getPublicUrlFor(metadata.getFilePath());
+            String url = publicAssetService.getPublicUrl(metadata.getFilePath());
             log.info("【直接上传-公共】文件上传成功，公开URL: {}", url);
             return R.success(url);
         } catch (Exception e) {

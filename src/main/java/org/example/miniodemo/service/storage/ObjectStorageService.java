@@ -86,14 +86,4 @@ public interface ObjectStorageService {
      * @throws Exception 如果生成URL失败。
      */
     String getPresignedDownloadUrl(String bucketName, String filePath, int duration, TimeUnit unit) throws Exception;
-
-    /**
-     * 获取公共存储桶中对象的永久访问URL。
-     *
-     * @param bucketName 存储桶名称。
-     * @param filePath   对象名称。
-     * @return 对象的可直接访问的URL。
-     * @throws Exception 如果获取URL失败，例如存储桶策略不允许公共访问。
-     */
-    String getPublicUrl(String bucketName, String filePath) throws Exception;
 }
