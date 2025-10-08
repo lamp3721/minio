@@ -27,13 +27,13 @@
         </template>
       </el-upload>
       <!-- 上传进度条容器，仅在有上传任务时显示 -->
-      <div v-if="uploadProgress.percentage > 0" class="progress-container">
-        <el-progress :percentage="uploadProgress.percentage" :text-inside="true" :stroke-width="20" class="progress-bar"/>
+      <div v-if="uploadProgress > 0" class="progress-container">
+        <el-progress :percentage="uploadProgress" :text-inside="true" :stroke-width="20" class="progress-bar"/>
         <div class="progress-info">
-          <span>{{ uploadProgress.status }}</span>
+          <span>{{ uploadStatus }}</span>
           <div class="sub-info">
-            <span v-if="uploadSpeed" class="upload-speed">速度: {{ uploadSpeed }}</span>
-            <span v-if="elapsedTime" class="elapsed-time">耗时: {{ elapsedTime }}</span>
+            <span v-if="uploadSpeed" class="upload-speed">速度: {{ uploadSpeed }} KB/s</span>
+            <span v-if="elapsedTime" class="elapsed-time">耗时: {{ formattedElapsedTime }}</span>
           </div>
         </div>
       </div>
@@ -136,11 +136,13 @@ const loading = ref(false);
 
 // --- 引入分片上传 Composable ---
 const {
-  uploadProgress, // 上传进度对象 { percentage, status }
+  uploadProgress, // 上传进度值
   uploadSpeed,    // 上传速度
   elapsedTime,    // 已耗时
+  formattedElapsedTime, // 格式化后的耗时
+  uploadStatus,   // 上传状态文本
   handleUpload,   // 处理上传的核心函数
-  gracefulReset,  // 优雅地重置上传组件状态的函数
+  resetUploadState, // 重置上传状态的函数
 } = useChunkUploader(uploaderConfig.value);
 
 // --- 上传组件钩子 ---
@@ -149,11 +151,16 @@ const {
  * @param {object} options - el-upload 传递的参数，包含 file 对象。
  */
 const customUploadRequest = async (options) => {
-  const result = await handleUpload(options.file, fetchFileList);
-  console.log('URL：', result.fileUrl);
-  // 如果上传成功且需要UI重置，则调用 gracefulReset
-  if (result && result.isSuccess && result.gracefulResetNeeded) {
-    gracefulReset(uploadRef);
+  const result = await handleUpload(options.file);
+  // 上传完成后，无论成功与否，都刷新文件列表
+  await fetchFileList();
+  // 如果上传成功，则优雅地重置UI
+  if (result && result.isSuccess) {
+    // gracefulReset 在 useChunkUploader 内部处理，这里不再需要额外操作
+  }
+  // 清理 el-upload 组件的文件列表，以便可以再次选择相同的文件
+  if (uploadRef.value) {
+    uploadRef.value.clearFiles();
   }
 };
 
