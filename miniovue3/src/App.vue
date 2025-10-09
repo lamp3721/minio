@@ -11,13 +11,7 @@
         <el-icon><Star /></el-icon>
         文件上传管理
       </el-menu-item>
-      <el-sub-menu index="legacy">
-        <template #title>
-          <span>旧版本 (兼容性)</span>
-        </template>
-        <el-menu-item index="/private-legacy">私有文件库 (旧版)</el-menu-item>
-        <el-menu-item index="/public-legacy">公共资源库 (旧版)</el-menu-item>
-      </el-sub-menu>
+      
     </el-menu>
     <div class="content-container">
       <router-view></router-view>

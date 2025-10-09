@@ -1,7 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import FileManager from '../views/FileManager.vue';
-import PrivateFiles from '../views/PrivateFiles.vue';
-import PublicAssets from '../views/PublicAssets.vue';
+// 旧版视图已移除
 
 const routes = [
   {
@@ -12,16 +11,6 @@ const routes = [
     path: '/upload',
     name: 'MainUpload',
     component: FileManager,
-  },
-  {
-    path: '/private-legacy',
-    name: 'PrivateFilesLegacy',
-    component: PrivateFiles,
-  },
-  {
-    path: '/public-legacy',
-    name: 'PublicAssetsLegacy',
-    component: PublicAssets,
   },
 ];
 
