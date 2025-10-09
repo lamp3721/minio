@@ -181,18 +181,17 @@ public class ChunkUploadSessionServiceImpl implements ChunkUploadSessionService 
             return false;
         }
         
-        // 检查会话状态是否允许合并
-        if (session.getStatus() == ChunkUploadStatus.COMPLETED || 
-            session.getStatus() == ChunkUploadStatus.EXPIRED ||
-            session.getStatus() == ChunkUploadStatus.FAILED) {
+        // 检查所有分片是否都已上传
+        boolean allChunksUploaded = session.getUploadedChunks().equals(session.getTotalChunks());
+        
+        // 已合并或过期直接不允许
+        if (session.getStatus() == ChunkUploadStatus.MERGED || 
+            session.getStatus() == ChunkUploadStatus.EXPIRED) {
             log.warn("【会话管理】会话状态不允许合并: 会话={}, 状态={}", sessionId, session.getStatus());
             return false;
         }
         
-        // 检查所有分片是否都已上传
-        boolean allChunksUploaded = session.getUploadedChunks().equals(session.getTotalChunks());
-        
-        // 如果所有分片都已上传但状态还不是READY_TO_MERGE，则更新状态
+        // 如果所有分片都已上传但状态还不是READY_TO_MERGE，则更新状态（允许从FAILED恢复）
         if (allChunksUploaded && session.getStatus() != ChunkUploadStatus.READY_TO_MERGE) {
             log.info("【会话管理】所有分片已上传，更新会话状态为READY_TO_MERGE: {}", sessionId);
             updateSessionStatus(sessionId, ChunkUploadStatus.READY_TO_MERGE);

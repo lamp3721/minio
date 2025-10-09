@@ -69,7 +69,7 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
                 log.info("【会话初始化 - {}】文件已存在，支持秒传: {}", getStorageType(), initDto.getFileHash());
                 UploadSessionResponseDto response = new UploadSessionResponseDto();
                 response.setSessionId(initDto.getFileHash());
-                response.setStatus(ChunkUploadStatus.COMPLETED);
+                response.setStatus(ChunkUploadStatus.MERGED);
                 response.setTotalChunks(initDto.getTotalChunks());
                 response.setUploadedChunks(initDto.getTotalChunks());
                 return R.success(response);
@@ -157,7 +157,7 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
             }
 
             ChunkUploadSession session = sessionOpt.get();
-            if (session.getStatus() == ChunkUploadStatus.COMPLETED || 
+            if (session.getStatus() == ChunkUploadStatus.MERGED || 
                 session.getStatus() == ChunkUploadStatus.EXPIRED) {
                 return R.error(ResultCode.UPLOAD_SESSION_STATE_MISMATCH, "会话状态不允许上传");
             }
@@ -214,13 +214,17 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
             }
 
             // 验证会话状态
-            if (!sessionService.isReadyToMerge(sessionId)) {
-                log.error("【文件合并 - {}】会话状态不允许合并: 会话={}, 状态={}, 已上传={}/{}", 
-                         getStorageType(), sessionId, session.getStatus(), 
-                         session.getUploadedChunks(), session.getTotalChunks());
-                throw new BusinessException(ResultCode.UPLOAD_SESSION_STATE_MISMATCH, 
-                    String.format("会话状态不允许合并，请确保所有分片已上传。当前状态: %s, 已上传: %d/%d", 
-                                 session.getStatus(), session.getUploadedChunks(), session.getTotalChunks()));
+            boolean readyToMerge = sessionService.isReadyToMerge(sessionId);
+            // 重新获取最新会话状态用于日志对比
+            Optional<ChunkUploadSession> latestSessionOpt = sessionService.getSession(sessionId);
+            ChunkUploadSession latestSession = latestSessionOpt.orElse(session);
+            log.info("【文件合并 - {}】合并校验: 会话={}, 可合并={}, 原状态={}, 当前状态={}, 已上传={}/{}",
+                    getStorageType(), sessionId, readyToMerge, session.getStatus(), latestSession.getStatus(),
+                    latestSession.getUploadedChunks(), latestSession.getTotalChunks());
+            if (!readyToMerge) {
+                throw new BusinessException(ResultCode.UPLOAD_SESSION_STATE_MISMATCH,
+                        String.format("会话状态不允许合并，请确保所有分片已上传。当前状态: %s, 已上传: %d/%d",
+                                latestSession.getStatus(), latestSession.getUploadedChunks(), latestSession.getTotalChunks()));
             }
 
             // 更新会话状态为合并中
@@ -307,8 +311,8 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
             FileMergedEvent event = new FileMergedEvent(this, metadata, sessionId, chunkPaths);
             eventPublisher.publish(event);
 
-            // 更新会话状态为已完成
-            sessionService.updateSessionStatus(sessionId, ChunkUploadStatus.COMPLETED);
+            // 更新会话状态为已合并
+            sessionService.updateSessionStatus(sessionId, ChunkUploadStatus.MERGED);
 
             log.info("【文件合并 - {}】文件合并成功: 会话={}, 最终路径={}", getStorageType(), sessionId, finalFilePath);
             return metadata;

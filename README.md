@@ -112,7 +112,25 @@ src
       ```
     - 首次运行时，需要向 `POST http://localhost:8080/minio/buckets/init` 发送一个请求来初始化存储桶。
 
-### 3. 前端启动
+### 3. 数据库迁移（重要）
+
+如果你之前已经通过旧版SQL在数据库中创建了 `chunk_upload_sessions`，并且列使用了 `ENUM` 类型，请按以下步骤迁移到 `VARCHAR + CHECK` 模式，以避免枚举变更带来的数据截断错误：
+
+1. 在 MySQL 控制台或客户端执行迁移脚本：
+   - 脚本位置：`src/main/resources/db/migration/2025_11_08_enum_to_varchar.sql`
+   - Windows 路径示例：
+     ```sql
+     SOURCE e:/@1 使用/minio/Pro/miniodemo/src/main/resources/db/migration/2025_11_08_enum_to_varchar.sql;
+     ```
+2. 验证迁移结果：
+   ```sql
+   SHOW CREATE TABLE chunk_upload_sessions; -- 确认 status 与 storage_type 为 VARCHAR
+   SELECT column_type FROM information_schema.columns 
+     WHERE table_schema = DATABASE() AND table_name = 'chunk_upload_sessions' AND column_name IN ('status','storage_type');
+   ```
+3. 如存在历史状态值 `COMPLETED`，脚本已自动归一化为 `MERGED`。
+
+### 4. 前端启动
 
 1.  **进入前端目录**：
     ```bash

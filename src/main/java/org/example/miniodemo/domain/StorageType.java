@@ -14,25 +14,27 @@ public enum StorageType {
      * <p>
      * 资源可以通过URL直接访问。
      */
-    PUBLIC("public", "公共读"),
+    PUBLIC("PUBLIC", "public", "公共读"),
     /**
      * 私有读写存储桶。
      * <p>
      * 资源需要授权（如预签名URL）才能访问。
      */
-    PRIVATE("private", "私有");
+    PRIVATE("PRIVATE", "private", "私有");
 
-    @EnumValue // 标记数据库存的值是code
-    @JsonValue // 标记json返回的值是code
-    private final String value;
+    @EnumValue // 标记数据库存的值是dbValue（与SQL枚举一致：大写）
+    private final String dbValue;
+    @JsonValue // 标记json返回的值是jsonValue（保持小写以兼容前端）
+    private final String jsonValue;
     private final String description;
 
-    StorageType(String value, String description) {
-        this.value = value;
+    StorageType(String dbValue, String jsonValue, String description) {
+        this.dbValue = dbValue;
+        this.jsonValue = jsonValue;
         this.description = description;
     }
 
     public String getCode() {
-        return value;
+        return jsonValue;
     }
-} 
+}

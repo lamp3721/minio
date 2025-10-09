@@ -20,5 +20,7 @@ CREATE TABLE `chunk_upload_sessions` (
     INDEX `idx_session_id` (`session_id`),
     INDEX `idx_status` (`status`),
     INDEX `idx_expires_at` (`expires_at`),
-    INDEX `idx_file_hash` (`file_hash`)
+    INDEX `idx_file_hash` (`file_hash`),
+    CONSTRAINT `chk_storage_type` CHECK (`storage_type` IN ('PUBLIC','PRIVATE')),
+    CONSTRAINT `chk_status` CHECK (`status` IN ('INIT','UPLOADING','READY_TO_MERGE','MERGING','MERGED','FAILED','EXPIRED'))
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '分片上传会话表';

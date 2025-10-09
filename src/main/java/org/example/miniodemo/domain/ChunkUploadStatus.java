@@ -5,6 +5,10 @@ package org.example.miniodemo.domain;
  */
 public enum ChunkUploadStatus {
     /**
+     * 已初始化，尚未上传
+     */
+    INIT,
+    /**
      * 上传中
      */
     UPLOADING,
@@ -20,9 +24,9 @@ public enum ChunkUploadStatus {
     MERGING,
     
     /**
-     * 已完成
+     * 已合并
      */
-    COMPLETED,
+    MERGED,
     
     /**
      * 已失败
