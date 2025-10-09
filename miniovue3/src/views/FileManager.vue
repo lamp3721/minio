@@ -93,18 +93,18 @@
 <script setup>
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Document, Picture, Check, Warning, Refresh } from '@element-plus/icons-vue';
-import apiClient from '../api';
+import apiClient from '../uploader/api';
 import FileManagerComponent from '../components/FileManagerComponent.vue';
 
 // --- 上传器配置 ---
 const privateUploaderConfig = {
   apiPrefix: '/private',
-  folderPath: import.meta.env.VITE_Folder_Path
+  folderPath: "file"
 };
 
 const publicUploaderConfig = {
   apiPrefix: '/public',
-  folderPath: import.meta.env.VITE_Folder_Path
+  folderPath: "file"
 };
 
 // --- 私有文件操作 ---

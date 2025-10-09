@@ -1,5 +1,5 @@
 import SparkMD5 from 'spark-md5';
-import { storageService } from '../services/storageService';
+import { storageService } from './services/storageService';
 
 /**
  * @description 文件分片大小，固定为5MB。
@@ -154,14 +154,6 @@ const calculateFileHash = (file, chunkSize = DEFAULT_CHUNK_SIZE) => {
 /**
  * 会话化分片上传核心（可配置分片大小与并发）
  * 1) 计算哈希与秒传；2) 初始化会话断点续传；3) 并发上传分片；4) 合并完成。
- * @param {File} file
- * @param {object} uploaderConfig - { apiPrefix, folderPath?, chunkSize?, maxConcurrency? }
- * @param {object} [callbacks]
- * @param {()=>void} [callbacks.onUploadStarted]
- * @param {(hash:string)=>void} [callbacks.onHashCalculated]
- * @param {(p:{percentage?:number,status?:string,totalUploadedBytes?:number})=>void} [callbacks.onProgress]
- * @param {()=>void} [callbacks.onUploadComplete]
- * @returns {Promise<{isSuccess:boolean, gracefulResetNeeded?:boolean, fileUrl?:string, error?:string}>}
  */
 export const handleFileUploadV2 = async (file, uploaderConfig, callbacks = {}) => {
     const { onProgress, onUploadComplete, onHashCalculated, onUploadStarted } = callbacks;
