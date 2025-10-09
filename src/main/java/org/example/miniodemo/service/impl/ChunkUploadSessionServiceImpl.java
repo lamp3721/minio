@@ -230,12 +230,14 @@ public class ChunkUploadSessionServiceImpl implements ChunkUploadSessionService 
         LambdaQueryWrapper<ChunkUploadSession> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.lt(ChunkUploadSession::getExpiresAt, LocalDateTime.now())
                    .or()
-                   .eq(ChunkUploadSession::getStatus, ChunkUploadStatus.EXPIRED);
+                   .eq(ChunkUploadSession::getStatus, ChunkUploadStatus.EXPIRED)
+                   .or()
+                   .eq(ChunkUploadSession::getStatus, ChunkUploadStatus.MERGED);
         
         List<ChunkUploadSession> expiredSessions = sessionMapper.selectList(queryWrapper);
         if (!expiredSessions.isEmpty()) {
             sessionMapper.delete(queryWrapper);
-            log.info("【会话管理】清理过期会话: {} 个", expiredSessions.size());
+            log.info("【会话管理】清理非进行中的会话记录: {} 个", expiredSessions.size());
         }
     }
     

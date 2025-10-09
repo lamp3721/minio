@@ -8,6 +8,7 @@ import org.example.miniodemo.domain.StorageType;
 import org.example.miniodemo.common.util.FilePathUtil;
 import org.example.miniodemo.repository.FileMetadataRepository;
 import org.example.miniodemo.service.storage.ObjectStorageService;
+import org.example.miniodemo.service.ChunkUploadSessionService;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -25,6 +26,7 @@ public class ScheduledCleanupService {
     private final ObjectStorageService objectStorageService;
     private final FileMetadataRepository fileMetadataRepository;
     private final MinioBucketConfig bucketConfig;
+    private final ChunkUploadSessionService sessionService;
 
     /**
      * 定时清理MinIO中的孤儿文件。
@@ -74,4 +76,21 @@ public class ScheduledCleanupService {
         }
         log.info("【定时任务】MinIO孤儿文件清理任务执行完毕。");
     }
-} 
+
+    /**
+     * 定时清理过期的分片上传会话（数据库记录）。
+     * <p>
+     * 会话过期后不再用于上传，应及时删除以避免堆积。
+     * 调用 service 层的清理方法，基于过期时间和状态删除。
+     */
+    @Scheduled(cron = "${minio.cleanup-cron}")
+    public void cleanupExpiredUploadSessions() {
+        log.info("【定时任务】开始执行过期会话清理任务...");
+        try {
+            sessionService.cleanupExpiredSessions();
+            log.info("【定时任务】过期会话清理任务执行完毕。");
+        } catch (Exception e) {
+            log.error("【定时任务】过期会话清理任务执行失败。", e);
+        }
+    }
+}

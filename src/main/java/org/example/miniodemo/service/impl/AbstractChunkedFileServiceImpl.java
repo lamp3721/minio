@@ -314,6 +314,8 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
             // 更新会话状态为已合并
             sessionService.updateSessionStatus(sessionId, ChunkUploadStatus.MERGED);
 
+            // 不再即时删除，改由定时清理任务统一清理 MERGED 会话
+
             log.info("【文件合并 - {}】文件合并成功: 会话={}, 最终路径={}", getStorageType(), sessionId, finalFilePath);
             return metadata;
             
