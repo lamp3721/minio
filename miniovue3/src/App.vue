@@ -7,8 +7,13 @@
         :router="true"
         @select="handleSelect"
     >
+      <el-menu-item index="/improved">
+        <el-icon><Star /></el-icon>
+        改进版本
+      </el-menu-item>
       <el-menu-item index="/private">私有文件库</el-menu-item>
       <el-menu-item index="/public">公共资源库</el-menu-item>
+      <el-menu-item index="/icon-test">图标测试</el-menu-item>
     </el-menu>
     <div class="content-container">
       <router-view></router-view>
@@ -19,6 +24,7 @@
 <script setup>
 import { ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
+import { Star } from '@element-plus/icons-vue';
 
 const route = useRoute();
 const activeIndex = ref(route.path);

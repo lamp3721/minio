@@ -9,6 +9,7 @@ import org.example.miniodemo.dto.CheckRequestDto;
 import org.example.miniodemo.dto.FileDetailDto;
 import org.example.miniodemo.dto.FileExistsDto;
 import org.example.miniodemo.dto.FileUploadDto;
+import org.example.miniodemo.dto.ImprovedMergeRequestDto;
 import org.example.miniodemo.dto.MergeRequestDto;
 import org.example.miniodemo.service.PublicAssetService;
 import org.example.miniodemo.service.impl.AbstractChunkedFileServiceImpl;
@@ -79,7 +80,7 @@ public class PublicAssetController extends BaseFileController {
     }
 
     /**
-     * 通知服务器合并指定批次的所有公共文件分片。
+     * 通知服务器合并指定批次的所有公共文件分片（旧接口，保持兼容性）。
      *
      * @param mergeRequest 包含文件合并所需全部信息的请求体。
      * @return 包含最终文件公开URL的响应体。
@@ -88,6 +89,24 @@ public class PublicAssetController extends BaseFileController {
     public R<String> mergePublicChunks(@RequestBody MergeRequestDto mergeRequest) {
         try {
             FileMetadata metadata = publicAssetService.mergeChunks(mergeRequest);
+            String url = publicAssetService.getPublicUrl(metadata.getFilePath());
+            return R.success(url);
+        } catch (Exception e) {
+            log.error("合并公共文件分片时出错: {}", e.getMessage(), e);
+            return R.error(ResultCode.MERGE_FAILED, "文件合并失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 改进的合并接口，基于会话管理
+     *
+     * @param mergeRequest 包含会话ID和验证信息的请求体
+     * @return 包含最终文件公开URL的响应体
+     */
+    @PostMapping("/upload/merge-v2")
+    public R<String> mergePublicChunksV2(@RequestBody ImprovedMergeRequestDto mergeRequest) {
+        try {
+            FileMetadata metadata = publicAssetService.mergeChunksWithSession(mergeRequest);
             String url = publicAssetService.getPublicUrl(metadata.getFilePath());
             return R.success(url);
         } catch (Exception e) {

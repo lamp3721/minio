@@ -4,14 +4,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.common.response.R;
 import org.example.miniodemo.common.response.ResultCode;
 import org.example.miniodemo.common.util.PathValidationUtil;
-import org.example.miniodemo.dto.ChunkUploadResponseDto;
-import org.example.miniodemo.dto.FileUploadDto;
+import org.example.miniodemo.dto.*;
 import org.example.miniodemo.service.AbstractChunkedFile;
+import org.example.miniodemo.service.ChunkUploadSessionService;
 import org.example.miniodemo.service.impl.PrivateFileServiceImpl;
 import org.example.miniodemo.service.impl.PublicAssetServiceImpl;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -25,6 +24,9 @@ import org.springframework.web.multipart.MultipartFile;
 @Slf4j
 public abstract class BaseFileController {
 
+    @Autowired
+    protected ChunkUploadSessionService sessionService;
+
     /**
      * 抽象方法，由子类实现，用于提供具体的文件服务实例。
      *
@@ -33,25 +35,40 @@ public abstract class BaseFileController {
     protected abstract AbstractChunkedFile getService();
 
     /**
-     * 通用的上传文件分片端点。
-     *
-     * @param file        通过 multipart/form-data 方式上传的文件分片。
-     * @param batchId     唯一标识本次文件上传任务的批次ID。
-     * @param chunkNumber 当前分片的序号。
-     * @return 包含操作结果的响应体。
+     * 初始化上传会话
+     */
+    @PostMapping("/upload/init")
+    public R<UploadSessionResponseDto> initUploadSession(@RequestBody InitUploadSessionDto initDto) {
+        if (initDto.getFileName() == null || initDto.getFileHash() == null || 
+            initDto.getFileSize() == null || initDto.getTotalChunks() == null) {
+            return R.error(ResultCode.BAD_REQUEST, "文件名、哈希值、大小和分片数不能为空");
+        }
+
+        return getService().initUploadSession(initDto);
+    }
+
+    /**
+     * 获取上传会话状态
+     */
+    @GetMapping("/upload/status/{sessionId}")
+    public R<UploadSessionResponseDto> getUploadStatus(@PathVariable String sessionId) {
+        return getService().getUploadStatus(sessionId);
+    }
+
+    /**
+     * 改进的上传文件分片端点
      */
     @PostMapping("/upload/chunk")
     public R<ChunkUploadResponseDto> uploadChunk(
             @RequestParam("file") MultipartFile file,
-            @RequestParam("batchId") String batchId,
+            @RequestParam("sessionId") String sessionId,
             @RequestParam("chunkNumber") Integer chunkNumber) {
 
-        if (file.isEmpty() || batchId.isBlank()) {
-            return R.error(ResultCode.BAD_REQUEST, "文件、批次ID或分片序号不能为空");
+        if (file.isEmpty() || sessionId.isBlank() || chunkNumber == null) {
+            return R.error(ResultCode.BAD_REQUEST, "文件、会话ID或分片序号不能为空");
         }
 
-        String chunkPath = getService().uploadChunk(file, batchId, chunkNumber);
-        return R.success(new ChunkUploadResponseDto(chunkNumber, chunkPath));
+        return getService().uploadChunkWithSession(file, sessionId, chunkNumber);
     }
 
     /**

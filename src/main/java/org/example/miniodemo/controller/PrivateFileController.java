@@ -5,10 +5,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.common.response.R;
 import org.example.miniodemo.common.response.ResultCode;
 import org.example.miniodemo.common.util.PathValidationUtil;
+import org.example.miniodemo.domain.FileMetadata;
 import org.example.miniodemo.dto.CheckRequestDto;
 import org.example.miniodemo.dto.FileDetailDto;
 import org.example.miniodemo.dto.FileExistsDto;
 import org.example.miniodemo.dto.FileUploadDto;
+import org.example.miniodemo.dto.ImprovedMergeRequestDto;
 import org.example.miniodemo.dto.MergeRequestDto;
 import org.example.miniodemo.service.PrivateFileService;
 import org.example.miniodemo.service.impl.AbstractChunkedFileServiceImpl;
@@ -70,7 +72,7 @@ public class PrivateFileController extends BaseFileController {
     }
 
     /**
-     * 通知服务器合并指定批次的所有分片。
+     * 通知服务器合并指定批次的所有分片（旧接口，保持兼容性）。
      *
      * @param mergeRequest 包含文件合并所需全部信息的请求体 ({@link MergeRequestDto})。
      * @return 包含操作结果（成功或失败消息）的响应体。
@@ -79,6 +81,18 @@ public class PrivateFileController extends BaseFileController {
     public R<String> mergePrivateChunks(@RequestBody MergeRequestDto mergeRequest) {
         privateFileService.mergeChunks(mergeRequest);
         return R.success("文件合并成功: " + mergeRequest.getFileName());
+    }
+
+    /**
+     * 改进的合并接口，基于会话管理
+     *
+     * @param mergeRequest 包含会话ID和验证信息的请求体
+     * @return 包含操作结果的响应体
+     */
+    @PostMapping("/upload/merge-v2")
+    public R<String> mergePrivateChunksV2(@RequestBody ImprovedMergeRequestDto mergeRequest) {
+        FileMetadata metadata = privateFileService.mergeChunksWithSession(mergeRequest);
+        return R.success("文件合并成功: " + metadata.getOriginalFilename());
     }
 
     /**

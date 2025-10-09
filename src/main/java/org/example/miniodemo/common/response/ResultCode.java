@@ -32,7 +32,12 @@ public enum ResultCode {
     FILE_NOT_EXIST(1007, "文件不存在"),
     MERGE_INVALID_PART(1008, "分片无效或顺序错误"),
     MERGE_SOURCE_NOT_FOUND(1009, "合并时源分片丢失"),
-    UPLOAD_SESSION_STATE_MISMATCH(1010, "上传会话状态不匹配");
+    UPLOAD_SESSION_STATE_MISMATCH(1010, "上传会话状态不匹配"),
+    
+    /* 会话管理相关错误 */
+    UPLOAD_SESSION_INIT_FAILED(1011, "初始化上传会话失败"),
+    UPLOAD_SESSION_NOT_FOUND(1012, "上传会话不存在"),
+    UPLOAD_SESSION_QUERY_FAILED(1013, "查询上传会话失败");
 
 
     /**

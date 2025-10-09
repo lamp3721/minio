@@ -1,11 +1,18 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import PrivateFiles from '../views/PrivateFiles.vue';
 import PublicAssets from '../views/PublicAssets.vue';
+import ImprovedUpload from '../views/ImprovedUpload.vue';
+import IconTest from '../views/IconTest.vue';
 
 const routes = [
   {
     path: '/',
-    redirect: '/private', // 设置默认重定向，访问根路径时自动跳转到私有文件页面
+    redirect: '/improved', // 设置默认重定向到改进版本
+  },
+  {
+    path: '/improved',
+    name: 'ImprovedUpload',
+    component: ImprovedUpload,
   },
   {
     path: '/private',
@@ -17,6 +24,11 @@ const routes = [
     name: 'PublicAssets',
     component: PublicAssets,
   },
+  {
+    path: '/icon-test',
+    name: 'IconTest',
+    component: IconTest,
+  },
 ];
 
 const router = createRouter({
@@ -24,4 +36,4 @@ const router = createRouter({
   routes,
 });
 
-export default router; 
+export default router;

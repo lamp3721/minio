@@ -2,23 +2,29 @@ package org.example.miniodemo.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.miniodemo.common.response.R;
 import org.example.miniodemo.common.response.ResultCode;
 import org.example.miniodemo.common.util.FilePathUtil;
+import org.example.miniodemo.domain.ChunkUploadSession;
+import org.example.miniodemo.domain.ChunkUploadStatus;
 import org.example.miniodemo.domain.FileMetadata;
 import org.example.miniodemo.domain.StorageType;
-import org.example.miniodemo.dto.MergeRequestDto;
+import org.example.miniodemo.dto.*;
 import org.example.miniodemo.event.EventPublisher;
 import org.example.miniodemo.event.FileMergedEvent;
 import org.example.miniodemo.exception.BusinessException;
 import org.example.miniodemo.repository.FileMetadataRepository;
 import org.example.miniodemo.service.AbstractChunkedFile;
 import org.example.miniodemo.service.AsyncFileService;
+import org.example.miniodemo.service.ChunkUploadSessionService;
 import org.example.miniodemo.service.storage.ObjectStorageService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -35,6 +41,9 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
     protected final FileMetadataRepository fileMetadataRepository;
     protected final AsyncFileService asyncFileService;
     protected final EventPublisher eventPublisher;
+    
+    @Autowired
+    protected ChunkUploadSessionService sessionService;
 
     // --- 抽象方法，由子类实现 ---
 
@@ -47,6 +56,226 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
      * 获取当前服务的存储类型（PUBLIC 或 PRIVATE）。
      */
     protected abstract StorageType getStorageType();
+
+    // --- 新的会话管理方法实现 ---
+
+    @Override
+    public R<UploadSessionResponseDto> initUploadSession(InitUploadSessionDto initDto) {
+        try {
+            // 先检查文件是否已存在（秒传）
+            Optional<FileMetadata> existingFile = checkFileExists(initDto.getFileHash());
+            if (existingFile.isPresent()) {
+                log.info("【会话初始化 - {}】文件已存在，支持秒传: {}", getStorageType(), initDto.getFileHash());
+                UploadSessionResponseDto response = new UploadSessionResponseDto();
+                response.setSessionId(initDto.getFileHash());
+                response.setStatus(ChunkUploadStatus.COMPLETED);
+                response.setTotalChunks(initDto.getTotalChunks());
+                response.setUploadedChunks(initDto.getTotalChunks());
+                return R.success(response);
+            }
+
+            // 创建或获取上传会话
+            ChunkUploadSession session = sessionService.createOrGetSession(
+                initDto.getFileHash(), // 使用文件哈希作为会话ID
+                initDto.getFileName(),
+                initDto.getFileHash(),
+                initDto.getFileSize(),
+                initDto.getContentType(),
+                initDto.getFolderPath(),
+                initDto.getTotalChunks(),
+                getBucketName(),
+                getStorageType()
+            );
+
+            // 构建响应
+            UploadSessionResponseDto response = new UploadSessionResponseDto();
+            response.setSessionId(session.getSessionId());
+            response.setStatus(session.getStatus());
+            response.setTotalChunks(session.getTotalChunks());
+            response.setUploadedChunks(session.getUploadedChunks());
+            
+            // 获取已上传的分片编号
+            List<String> uploadedPaths = sessionService.getUploadedChunkPaths(session.getSessionId());
+            List<Integer> uploadedChunkNumbers = new ArrayList<>();
+            for (int i = 0; i < uploadedPaths.size(); i++) {
+                if (uploadedPaths.get(i) != null && !uploadedPaths.get(i).isEmpty()) {
+                    uploadedChunkNumbers.add(i + 1); // 分片编号从1开始
+                }
+            }
+            response.setUploadedChunkNumbers(uploadedChunkNumbers);
+
+            log.info("【会话初始化 - {}】会话创建成功: {}", getStorageType(), session.getSessionId());
+            return R.success(response);
+            
+        } catch (Exception e) {
+            log.error("【会话初始化 - {}】初始化上传会话失败", getStorageType(), e);
+            return R.error(ResultCode.UPLOAD_SESSION_INIT_FAILED, "初始化上传会话失败: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public R<UploadSessionResponseDto> getUploadStatus(String sessionId) {
+        try {
+            Optional<ChunkUploadSession> sessionOpt = sessionService.getSession(sessionId);
+            if (sessionOpt.isEmpty()) {
+                return R.error(ResultCode.UPLOAD_SESSION_NOT_FOUND, "上传会话不存在");
+            }
+
+            ChunkUploadSession session = sessionOpt.get();
+            UploadSessionResponseDto response = new UploadSessionResponseDto();
+            response.setSessionId(session.getSessionId());
+            response.setStatus(session.getStatus());
+            response.setTotalChunks(session.getTotalChunks());
+            response.setUploadedChunks(session.getUploadedChunks());
+
+            // 获取已上传的分片编号
+            List<String> uploadedPaths = sessionService.getUploadedChunkPaths(session.getSessionId());
+            List<Integer> uploadedChunkNumbers = new ArrayList<>();
+            for (int i = 0; i < uploadedPaths.size(); i++) {
+                if (uploadedPaths.get(i) != null && !uploadedPaths.get(i).isEmpty()) {
+                    uploadedChunkNumbers.add(i + 1);
+                }
+            }
+            response.setUploadedChunkNumbers(uploadedChunkNumbers);
+
+            return R.success(response);
+            
+        } catch (Exception e) {
+            log.error("【会话状态 - {}】获取上传状态失败: {}", getStorageType(), sessionId, e);
+            return R.error(ResultCode.UPLOAD_SESSION_QUERY_FAILED, "获取上传状态失败: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public R<ChunkUploadResponseDto> uploadChunkWithSession(MultipartFile file, String sessionId, Integer chunkNumber) {
+        try {
+            // 验证会话
+            Optional<ChunkUploadSession> sessionOpt = sessionService.getSession(sessionId);
+            if (sessionOpt.isEmpty()) {
+                return R.error(ResultCode.UPLOAD_SESSION_NOT_FOUND, "上传会话不存在");
+            }
+
+            ChunkUploadSession session = sessionOpt.get();
+            if (session.getStatus() == ChunkUploadStatus.COMPLETED || 
+                session.getStatus() == ChunkUploadStatus.EXPIRED) {
+                return R.error(ResultCode.UPLOAD_SESSION_STATE_MISMATCH, "会话状态不允许上传");
+            }
+
+            // 验证分片编号
+            if (chunkNumber < 1 || chunkNumber > session.getTotalChunks()) {
+                return R.error(ResultCode.BAD_REQUEST, "分片编号无效");
+            }
+
+            // 上传分片
+            String chunkPath = sessionId + "/" + chunkNumber;
+            try (InputStream inputStream = file.getInputStream()) {
+                objectStorageService.upload(
+                    getBucketName(),
+                    chunkPath,
+                    inputStream,
+                    file.getSize(),
+                    file.getContentType()
+                );
+            }
+
+            // 记录分片上传成功
+            sessionService.recordChunkUploaded(sessionId, chunkNumber, chunkPath);
+
+            log.info("【分片上传 - {}】分片上传成功: 会话={}, 分片={}", getStorageType(), sessionId, chunkNumber);
+            return R.success(new ChunkUploadResponseDto(chunkNumber, chunkPath));
+            
+        } catch (Exception e) {
+            log.error("【分片上传 - {}】分片上传失败: 会话={}, 分片={}", getStorageType(), sessionId, chunkNumber, e);
+            return R.error(ResultCode.FILE_UPLOAD_FAILED, "分片上传失败: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public FileMetadata mergeChunksWithSession(ImprovedMergeRequestDto mergeRequestDto) {
+        String sessionId = mergeRequestDto.getSessionId();
+        
+        try {
+            // 验证会话
+            Optional<ChunkUploadSession> sessionOpt = sessionService.getSession(sessionId);
+            if (sessionOpt.isEmpty()) {
+                throw new BusinessException(ResultCode.UPLOAD_SESSION_NOT_FOUND, "上传会话不存在");
+            }
+
+            ChunkUploadSession session = sessionOpt.get();
+            
+            log.info("【文件合并 - {}】开始验证会话: 会话={}, 文件={}", getStorageType(), sessionId, mergeRequestDto.getFileName());
+            
+            // 验证文件哈希
+            if (!session.getFileHash().equals(mergeRequestDto.getFileHash())) {
+                log.error("【文件合并 - {}】文件哈希不匹配: 会话={}, 期望={}, 实际={}", 
+                         getStorageType(), sessionId, session.getFileHash(), mergeRequestDto.getFileHash());
+                throw new BusinessException(ResultCode.VALIDATE_FAILED, "文件哈希不匹配");
+            }
+
+            // 验证会话状态
+            if (!sessionService.isReadyToMerge(sessionId)) {
+                log.error("【文件合并 - {}】会话状态不允许合并: 会话={}, 状态={}, 已上传={}/{}", 
+                         getStorageType(), sessionId, session.getStatus(), 
+                         session.getUploadedChunks(), session.getTotalChunks());
+                throw new BusinessException(ResultCode.UPLOAD_SESSION_STATE_MISMATCH, 
+                    String.format("会话状态不允许合并，请确保所有分片已上传。当前状态: %s, 已上传: %d/%d", 
+                                 session.getStatus(), session.getUploadedChunks(), session.getTotalChunks()));
+            }
+
+            // 更新会话状态为合并中
+            sessionService.updateSessionStatus(sessionId, ChunkUploadStatus.MERGING);
+
+            // 获取所有分片路径
+            List<String> chunkPaths = sessionService.getUploadedChunkPaths(sessionId);
+            log.info("【文件合并 - {}】获取分片路径: 会话={}, 分片数={}, 期望数={}", 
+                    getStorageType(), sessionId, chunkPaths.size(), session.getTotalChunks());
+            
+            if (chunkPaths.isEmpty()) {
+                throw new BusinessException(ResultCode.VALIDATE_FAILED, "未找到任何分片，无法合并");
+            }
+            
+            if (chunkPaths.size() != session.getTotalChunks()) {
+                log.error("【文件合并 - {}】分片数量不匹配: 会话={}, 实际={}, 期望={}", 
+                         getStorageType(), sessionId, chunkPaths.size(), session.getTotalChunks());
+                throw new BusinessException(ResultCode.VALIDATE_FAILED, 
+                    String.format("分片数量不匹配，实际: %d, 期望: %d", chunkPaths.size(), session.getTotalChunks()));
+            }
+
+            // 构建最终文件路径
+            String finalFilePath = FilePathUtil.buildDateBasedPath(
+                mergeRequestDto.getFolderPath(), 
+                mergeRequestDto.getFileHash(), 
+                mergeRequestDto.getFileName()
+            );
+
+            // 执行合并
+            objectStorageService.compose(getBucketName(), chunkPaths, finalFilePath);
+            log.info("【文件合并 - {}】对象存储操作成功。最终对象: '{}'。", getStorageType(), finalFilePath);
+
+            // 构建文件元数据
+            FileMetadata metadata = buildFileMetadataFromSession(session, finalFilePath);
+
+            // 发布文件合并成功事件
+            FileMergedEvent event = new FileMergedEvent(this, metadata, sessionId, chunkPaths);
+            eventPublisher.publish(event);
+
+            // 更新会话状态为已完成
+            sessionService.updateSessionStatus(sessionId, ChunkUploadStatus.COMPLETED);
+
+            log.info("【文件合并 - {}】文件合并成功: 会话={}, 最终路径={}", getStorageType(), sessionId, finalFilePath);
+            return metadata;
+            
+        } catch (BusinessException e) {
+            // 业务异常直接重新抛出，不更新会话状态（因为可能是验证失败等）
+            log.error("【文件合并 - {}】业务异常: 会话={}, 错误={}", getStorageType(), sessionId, e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            // 其他异常（如IO异常、MinIO异常等）更新会话状态为失败
+            sessionService.updateSessionStatus(sessionId, ChunkUploadStatus.FAILED);
+            log.error("【文件合并 - {}】文件合并失败: 会话={}", getStorageType(), sessionId, e);
+            throw new BusinessException(ResultCode.UPLOAD_SESSION_STATE_MISMATCH, "文件合并失败: " + e.getMessage(), e);
+        }
+    }
 
 
     /**
@@ -228,6 +457,26 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
         metadata.setContentHash(mergeRequestDto.getFileHash());
         metadata.setBucketName(getBucketName());
         metadata.setStorageType(getStorageType());
+        return metadata;
+    }
+
+    /**
+     * 从会话构建文件元数据
+     *
+     * @param session  上传会话
+     * @param filePath 文件在存储中的完整路径
+     * @return 文件元数据
+     */
+    private FileMetadata buildFileMetadataFromSession(ChunkUploadSession session, String filePath) {
+        FileMetadata metadata = new FileMetadata();
+        metadata.setFolderPath(session.getFolderPath());
+        metadata.setFilePath(filePath);
+        metadata.setOriginalFilename(session.getFileName());
+        metadata.setFileSize(session.getFileSize());
+        metadata.setContentType(session.getContentType());
+        metadata.setContentHash(session.getFileHash());
+        metadata.setBucketName(session.getBucketName());
+        metadata.setStorageType(session.getStorageType());
         return metadata;
     }
 }
