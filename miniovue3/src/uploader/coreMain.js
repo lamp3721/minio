@@ -40,6 +40,32 @@ const shouldRetryMerge = (error) => {
     return false;
 };
 
+// 小文件直接上传
+const directUploadSmallFile = async (file, uploaderConfig, fileHash, CHUNK_SIZE, onProgress, onUploadComplete) => {
+    if (file.size >= CHUNK_SIZE) {
+        return { handled: false };
+    }
+    try {
+        onProgress?.({ percentage: 0, status: '文件较小，正在直接上传...' });
+        const formData = new FormData();
+        formData.append('file', file);
+        const dto = {
+            fileHash: fileHash,
+            folderPath: uploaderConfig.folderPath || ''
+        };
+        formData.append('dto', new Blob([JSON.stringify(dto)], { type: 'application/json' }));
+        const result = await storageService.uploadFile(uploaderConfig, formData);
+        onProgress?.({ percentage: 100, status: '文件上传成功！' });
+        onUploadComplete?.();
+        return { handled: true, result: { isSuccess: true, gracefulResetNeeded: true, fileUrl: result } };
+    } catch (error) {
+        console.error('直接上传失败:', error);
+        onProgress?.({ status: `直接上传失败: ${error.message}` });
+        onUploadComplete?.();
+        return { handled: true, result: { isSuccess: false, error: error.message } };
+    }
+};
+
 /**
  * 上传单个分片（带指数退避重试）
  * @param {object} uploaderConfig - 包含 `apiPrefix`、`folderPath` 等
@@ -64,6 +90,43 @@ const uploadChunkWithRetry = async (uploaderConfig, formData, chunkNumber, onPro
             throw err;
         }
     }
+};
+
+// 并发上传分片
+const uploadChunksConcurrently = async (
+    file,
+    queue,
+    CHUNK_SIZE,
+    sessionId,
+    uploaderConfig,
+    MAX_CONCURRENCY,
+    onProgress,
+    totalChunks,
+    initialUploaded = []
+) => {
+    const completedChunks = new Set(initialUploaded);
+    const runNext = async () => {
+        const next = queue.shift();
+        if (next === undefined) return;
+        const chunk = file.slice((next - 1) * CHUNK_SIZE, next * CHUNK_SIZE);
+        const formData = new FormData();
+        formData.append('file', chunk);
+        formData.append('sessionId', sessionId);
+        formData.append('chunkNumber', next.toString());
+        await uploadChunkWithRetry(uploaderConfig, formData, next, onProgress);
+        completedChunks.add(next);
+        const uploadedCount = completedChunks.size;
+        const totalUploadedBytes = Math.min(file.size, uploadedCount * CHUNK_SIZE);
+        onProgress?.({
+            percentage: Math.floor((uploadedCount / totalChunks) * 100),
+            status: `正在上传分片: ${uploadedCount} / ${totalChunks}`,
+            totalUploadedBytes
+        });
+        return runNext();
+    };
+    const workers = Array.from({ length: Math.min(MAX_CONCURRENCY, queue.length) }, () => runNext());
+    await Promise.all(workers);
+    return completedChunks;
 };
 
 /**
@@ -111,6 +174,65 @@ const mergeWithRetry = async (uploaderConfig, mergeData, sessionId, totalChunks,
         }
     }
     throw lastError;
+};
+
+// 初始化上传会话或秒传
+const initUploadSessionOrFastPath = async (file, uploaderConfig, fileHash, totalChunks, onProgress) => {
+    onProgress?.({ status: '正在初始化上传会话...' });
+    const initData = {
+        fileName: file.name,
+        fileHash: fileHash,
+        fileSize: file.size,
+        contentType: file.type,
+        totalChunks: totalChunks,
+        folderPath: uploaderConfig.folderPath || ''
+    };
+    const sessionResponse = await storageService.initUploadSession(uploaderConfig, initData);
+    const sessionId = sessionResponse.sessionId;
+    const uploadedChunkNumbers = sessionResponse.uploadedChunkNumbers || [];
+    const mergedOrFast = sessionResponse.status === 'MERGED' || sessionResponse.uploadedChunks === totalChunks;
+    return { sessionId, uploadedChunkNumbers, mergedOrFast };
+};
+
+// 规划待上传分片队列
+const planChunkQueue = (uploadedChunkNumbers, totalChunks) => {
+    const queue = [];
+    for (let i = 1; i <= totalChunks; i++) {
+        if (uploadedChunkNumbers.includes(i)) continue;
+        queue.push(i);
+    }
+    return queue;
+};
+
+// 验证并合并
+const verifyAndMerge = async (file, uploaderConfig, sessionId, fileHash, totalChunks, onProgress) => {
+    onProgress?.({ status: '验证上传状态...' });
+    let retryCount = 0;
+    const maxRetries = 5;
+    let finalStatusResponse;
+    while (retryCount < maxRetries) {
+        finalStatusResponse = await storageService.getUploadStatus(uploaderConfig, sessionId);
+        if (finalStatusResponse.uploadedChunks === totalChunks) {
+            break;
+        }
+        if (retryCount < maxRetries - 1) {
+            await sleep(1000);
+        }
+        retryCount++;
+    }
+    if (finalStatusResponse.uploadedChunks !== totalChunks) {
+        throw new Error(`分片上传验证失败: ${finalStatusResponse.uploadedChunks}/${totalChunks}`);
+    }
+    onProgress?.({ status: '正在合并文件...' });
+    const mergeData = {
+        sessionId: sessionId,
+        fileName: file.name,
+        fileHash: fileHash,
+        folderPath: uploaderConfig.folderPath || '',
+        expectedChunkCount: totalChunks
+    };
+    const result = await mergeWithRetry(uploaderConfig, mergeData, sessionId, totalChunks, onProgress);
+    return result;
 };
 
 /**
@@ -174,125 +296,55 @@ export const handleFileUploadV2 = async (file, uploaderConfig, callbacks = {}) =
         return { isSuccess: false, error: e.message };
     }
 
-    // 如果文件小于分片大小，则直接上传
-    if (file.size < CHUNK_SIZE) {
-        try {
-            onProgress?.({ percentage: 0, status: '文件较小，正在直接上传...' });
-            
-            const formData = new FormData();
-            formData.append('file', file);
-            
-            const dto = {
-                fileHash: fileHash,
-                folderPath: uploaderConfig.folderPath || ''
-            };
-            formData.append('dto', new Blob([JSON.stringify(dto)], { type: 'application/json' }));
-
-            const result = await storageService.uploadFile(uploaderConfig, formData);
-            onProgress?.({ percentage: 100, status: '文件上传成功！' });
-            onUploadComplete?.();
-            return { isSuccess: true, gracefulResetNeeded: true, fileUrl: result };
-        } catch (error) {
-            console.error('直接上传失败:', error);
-            onProgress?.({ status: `直接上传失败: ${error.message}` });
-            onUploadComplete?.();
-            return { isSuccess: false, error: error.message };
-        }
-    }
+    const direct = await directUploadSmallFile(file, uploaderConfig, fileHash, CHUNK_SIZE, onProgress, onUploadComplete);
+    if (direct.handled) return direct.result;
 
     // 步骤 2: 初始化上传会话
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
     let sessionId;
-    
+    let uploadedChunkNumbers = [];
     try {
-        onProgress?.({ status: '正在初始化上传会话...' });
-        
-        const initData = {
-            fileName: file.name,
-            fileHash: fileHash,
-            fileSize: file.size,
-            contentType: file.type,
-            totalChunks: totalChunks,
-            folderPath: uploaderConfig.folderPath || ''
-        };
-        
-        const sessionResponse = await storageService.initUploadSession(uploaderConfig, initData);
-        sessionId = sessionResponse.sessionId;
-        
-        // 检查是否支持秒传或已合并
-        if (sessionResponse.status === 'MERGED' || sessionResponse.uploadedChunks === totalChunks) {
+        const initRes = await initUploadSessionOrFastPath(file, uploaderConfig, fileHash, totalChunks, onProgress);
+        sessionId = initRes.sessionId;
+        uploadedChunkNumbers = initRes.uploadedChunkNumbers;
+        if (initRes.mergedOrFast) {
             onProgress?.({ percentage: 100, status: '秒传成功！' });
             onUploadComplete?.();
             return { isSuccess: true, gracefulResetNeeded: true };
         }
-        
-        // 获取已上传的分片
-        const uploadedChunkNumbers = sessionResponse.uploadedChunkNumbers || [];
-        onProgress?.({ 
+        onProgress?.({
             percentage: Math.floor((uploadedChunkNumbers.length / totalChunks) * 100),
-            status: `会话初始化成功，已上传 ${uploadedChunkNumbers.length}/${totalChunks} 个分片` 
+            status: `会话初始化成功，已上传 ${uploadedChunkNumbers.length}/${totalChunks} 个分片`
         });
-        
     } catch (error) {
         console.error('初始化上传会话失败:', error);
         return { isSuccess: false, error: error.message };
     }
 
     // 步骤 3: 分片上传
-    const completedChunks = new Set();
-
-    // 获取当前会话状态
     try {
         const statusResponse = await storageService.getUploadStatus(uploaderConfig, sessionId);
-        // 如果会话状态已是 MERGED，直接返回成功，避免后续上传和合并
         if (statusResponse.status === 'MERGED') {
             onProgress?.({ percentage: 100, status: '文件已合并（秒传），无需上传分片。' });
             onUploadComplete?.();
             return { isSuccess: true, gracefulResetNeeded: true };
         }
-        const uploadedChunkNumbers = statusResponse.uploadedChunkNumbers || [];
-        
-        // 将已上传的分片添加到完成集合中
-        uploadedChunkNumbers.forEach(num => completedChunks.add(num));
-        
-        // 并发调度上传任务
-        const queue = [];
-        for (let i = 1; i <= totalChunks; i++) {
-            if (uploadedChunkNumbers.includes(i)) continue; // 跳过已上传
-            queue.push(i);
-        }
-
-        const runNext = async () => {
-            const next = queue.shift();
-            if (next === undefined) return;
-
-            const chunk = file.slice((next - 1) * CHUNK_SIZE, next * CHUNK_SIZE);
-            const formData = new FormData();
-            formData.append('file', chunk);
-            formData.append('sessionId', sessionId);
-            formData.append('chunkNumber', next.toString());
-
-            await uploadChunkWithRetry(uploaderConfig, formData, next, onProgress);
-            completedChunks.add(next);
-            const uploadedCount = completedChunks.size;
-            const totalUploadedBytes = uploadedCount * CHUNK_SIZE;
-            onProgress?.({
-                percentage: Math.floor((uploadedCount / totalChunks) * 100),
-                status: `正在上传分片: ${uploadedCount} / ${totalChunks}`,
-                totalUploadedBytes: totalUploadedBytes > file.size ? file.size : totalUploadedBytes
-            });
-
-            return runNext();
-        };
-
-        const workers = Array.from({ length: Math.min(MAX_CONCURRENCY, queue.length) }, () => runNext());
-        await Promise.all(workers);
-        
-        // 验证所有分片都已上传
+        const currentUploaded = statusResponse.uploadedChunkNumbers || uploadedChunkNumbers || [];
+        const queue = planChunkQueue(currentUploaded, totalChunks);
+        const completedChunks = await uploadChunksConcurrently(
+            file,
+            queue,
+            CHUNK_SIZE,
+            sessionId,
+            uploaderConfig,
+            MAX_CONCURRENCY,
+            onProgress,
+            totalChunks,
+            currentUploaded
+        );
         if (completedChunks.size !== totalChunks) {
             throw new Error(`分片上传不完整: ${completedChunks.size}/${totalChunks}`);
         }
-        
     } catch (e) {
         console.error('部分分片上传失败，请重试。', e);
         return { isSuccess: false, error: '分片上传失败: ' + e.message };
@@ -300,43 +352,7 @@ export const handleFileUploadV2 = async (file, uploaderConfig, callbacks = {}) =
 
     // 步骤 4: 验证会话状态并合并分片
     try {
-        onProgress?.({ status: '验证上传状态...' });
-        
-        // 等待会话状态更新，最多重试5次
-        let retryCount = 0;
-        const maxRetries = 5;
-        let finalStatusResponse;
-        
-        while (retryCount < maxRetries) {
-            finalStatusResponse = await storageService.getUploadStatus(uploaderConfig, sessionId);
-            
-            if (finalStatusResponse.uploadedChunks === totalChunks) {
-                break; // 所有分片都已上传
-            }
-            
-            if (retryCount < maxRetries - 1) {
-                console.log(`等待会话状态更新... 重试 ${retryCount + 1}/${maxRetries}, 当前: ${finalStatusResponse.uploadedChunks}/${totalChunks}`);
-                await new Promise(resolve => setTimeout(resolve, 1000)); // 等待1秒
-            }
-            retryCount++;
-        }
-        
-        if (finalStatusResponse.uploadedChunks !== totalChunks) {
-            throw new Error(`分片上传验证失败: ${finalStatusResponse.uploadedChunks}/${totalChunks}`);
-        }
-        
-        onProgress?.({ status: '正在合并文件...' });
-        
-        const mergeData = {
-            sessionId: sessionId,
-            fileName: file.name,
-            fileHash: fileHash,
-            folderPath: uploaderConfig.folderPath || '',
-            expectedChunkCount: totalChunks
-        };
-        
-        const result = await mergeWithRetry(uploaderConfig, mergeData, sessionId, totalChunks, onProgress);
-        
+        const result = await verifyAndMerge(file, uploaderConfig, sessionId, fileHash, totalChunks, onProgress);
         onProgress?.({ percentage: 100, status: '文件上传成功！' });
         onUploadComplete?.();
         return { isSuccess: true, gracefulResetNeeded: true, fileUrl: result };

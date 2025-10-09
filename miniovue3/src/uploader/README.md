@@ -174,3 +174,19 @@ await upload(file);
 ### 常见问题
 - 并发与稳定性：并发建议 2–6，过高可能因网络/后端限速而不稳。
 - 秒传与哈希：默认计算 MD5 用于秒传与会话检索；超大文件可考虑在后端侧做内容匹配与策略优化。
+
+## 内部结构（SRP 重构）
+- `coreMain.js` 负责流程编排：哈希 -> 会话初始化/秒传 -> 并发分片上传 -> 校验与合并。
+- 单一职责辅助函数：
+  - `directUploadSmallFile`：小文件直传路径。
+  - `initUploadSessionOrFastPath`：初始化会话并判断是否命中秒传。
+  - `planChunkQueue`：生成待上传分片队列。
+  - `uploadChunksConcurrently`：并发上传分片并汇报进度。
+  - `verifyAndMerge`：校验会话并触发合并（含重试）。
+- `services/storageService.js` 封装后端 API；`universalUploader.js` 与 `useChunkUploaderMain.js` 保持原有接口不变。
+
+## 测试建议
+- 单元测试：为 `uploadChunkWithRetry`、`mergeWithRetry`、`planChunkQueue`、`verifyAndMerge` 各自编写测试，模拟网络错误与业务错误。
+- 集成测试：以 `handleFileUploadV2` 为入口，覆盖直传、多分片并发、断点续传、秒传命中、合并失败重试路径。
+- 配置测试：在不同 `chunkSize` 与 `maxConcurrency` 下验证进度与结果一致性。
+- Vue 侧：`useChunkUploaderV2` 的回调字段未变（`onUploadStarted`、`onHashCalculated`、`onProgress`、`onUploadComplete`），现有组件可无缝继续使用。
