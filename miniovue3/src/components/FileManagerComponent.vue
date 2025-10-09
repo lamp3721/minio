@@ -74,7 +74,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { ElMessage } from 'element-plus';
 import apiClient from '../api';
-import { useChunkUploaderV2 } from '../uploader/useChunkUploaderV2';
+import { useChunkUploaderV2 } from '../uploader/useChunkUploaderMain';
 
 // --- 组件属性定义 ---
 const props = defineProps({

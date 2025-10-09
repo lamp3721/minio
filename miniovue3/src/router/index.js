@@ -1,33 +1,27 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import FileManager from '../views/FileManager.vue';
 import PrivateFiles from '../views/PrivateFiles.vue';
 import PublicAssets from '../views/PublicAssets.vue';
-import ImprovedUpload from '../views/ImprovedUpload.vue';
-import IconTest from '../views/IconTest.vue';
 
 const routes = [
   {
     path: '/',
-    redirect: '/improved', // 设置默认重定向到改进版本
+    redirect: '/upload', // 设置默认重定向到主上传页面
   },
   {
-    path: '/improved',
-    name: 'ImprovedUpload',
-    component: ImprovedUpload,
+    path: '/upload',
+    name: 'MainUpload',
+    component: FileManager,
   },
   {
-    path: '/private',
-    name: 'PrivateFiles',
+    path: '/private-legacy',
+    name: 'PrivateFilesLegacy',
     component: PrivateFiles,
   },
   {
-    path: '/public',
-    name: 'PublicAssets',
+    path: '/public-legacy',
+    name: 'PublicAssetsLegacy',
     component: PublicAssets,
-  },
-  {
-    path: '/icon-test',
-    name: 'IconTest',
-    component: IconTest,
   },
 ];
 

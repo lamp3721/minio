@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue';
-import { handleFileUploadV2 } from './core-v2';
+import { handleFileUploadV2 } from './coreMain';
 
 /**
  * @description 改进的Vue 3组合式函数，基于会话管理的分片上传

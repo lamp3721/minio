@@ -141,21 +141,28 @@ public class ChunkUploadSessionServiceImpl implements ChunkUploadSessionService 
         
         ChunkUploadSession session = sessionOpt.get();
         List<String> chunkPaths = parseChunkPaths(session.getChunkPathsJson());
-        
-        // 确保返回按顺序排列的所有有效分片路径
-        List<String> validPaths = new ArrayList<>();
+
+        // 扩展列表长度到总分片数，未上传的分片使用 null 作为占位
+        while (chunkPaths.size() < session.getTotalChunks()) {
+            chunkPaths.add(null);
+        }
+
+        // 记录缺失的分片（仅日志，不中断返回），以支持断点续传
+        int missingCount = 0;
         for (int i = 0; i < session.getTotalChunks(); i++) {
-            if (i < chunkPaths.size() && chunkPaths.get(i) != null && !chunkPaths.get(i).isEmpty()) {
-                validPaths.add(chunkPaths.get(i));
-            } else {
-                log.warn("【会话管理】分片 {} 缺失: 会话={}", i + 1, sessionId);
-                // 如果有分片缺失，返回空列表表示不完整
-                return new ArrayList<>();
+            if (chunkPaths.get(i) == null || chunkPaths.get(i).isEmpty()) {
+                missingCount++;
             }
         }
-        
-        log.info("【会话管理】获取分片路径: 会话={}, 分片数={}", sessionId, validPaths.size());
-        return validPaths;
+        if (missingCount > 0) {
+            log.info("【会话管理】分片缺失统计: 会话={}, 缺失={}, 已上传={}/{}}", 
+                    sessionId, missingCount, session.getUploadedChunks(), session.getTotalChunks());
+        }
+
+        // 返回按分片编号顺序的完整列表（包含未上传分片的占位）
+        log.info("【会话管理】获取分片路径: 会话={}, 返回列表长度={}, 总分片={}", 
+                sessionId, chunkPaths.size(), session.getTotalChunks());
+        return chunkPaths;
     }
     
     @Override

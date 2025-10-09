@@ -3,7 +3,7 @@
     <el-row :gutter="20">
       <!-- 私有文件上传 -->
       <el-col :span="12">
-        <FileManagerV2
+        <FileManagerComponent
           title="私有文件 (改进版)"
           :uploader-config="privateUploaderConfig"
           :show-visit-count="true"
@@ -14,12 +14,12 @@
             <el-button size="small" type="success" @click="handleCopyLink(row)">复制链接</el-button>
             <el-button size="small" type="danger" @click="handleDelete(row, fetchFileList, 'private')">删除</el-button>
           </template>
-        </FileManagerV2>
+        </FileManagerComponent>
       </el-col>
 
       <!-- 公共文件上传 -->
       <el-col :span="12">
-        <FileManagerV2
+        <FileManagerComponent
           title="公共文件 (改进版)"
           upload-tip="支持大文件分片上传，基于会话管理，文件将公开访问。"
           :uploader-config="publicUploaderConfig"
@@ -54,7 +54,7 @@
             <el-button size="small" type="success" @click="handleCopyPublicLink(row)">复制链接</el-button>
             <el-button size="small" type="danger" @click="handleDelete(row, fetchFileList, 'public')">删除</el-button>
           </template>
-        </FileManagerV2>
+        </FileManagerComponent>
       </el-col>
     </el-row>
 
@@ -94,7 +94,7 @@
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Document, Picture, Check, Warning, Refresh } from '@element-plus/icons-vue';
 import apiClient from '../api';
-import FileManagerV2 from '../components/FileManagerV2.vue';
+import FileManagerComponent from '../components/FileManagerComponent.vue';
 
 // --- 上传器配置 ---
 const privateUploaderConfig = {

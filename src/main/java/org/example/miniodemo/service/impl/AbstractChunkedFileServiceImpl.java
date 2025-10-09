@@ -18,6 +18,7 @@ import org.example.miniodemo.service.AbstractChunkedFile;
 import org.example.miniodemo.service.AsyncFileService;
 import org.example.miniodemo.service.ChunkUploadSessionService;
 import org.example.miniodemo.service.storage.ObjectStorageService;
+import org.example.miniodemo.domain.StorageObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -239,6 +240,53 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
                          getStorageType(), sessionId, chunkPaths.size(), session.getTotalChunks());
                 throw new BusinessException(ResultCode.VALIDATE_FAILED, 
                     String.format("分片数量不匹配，实际: %d, 期望: %d", chunkPaths.size(), session.getTotalChunks()));
+            }
+
+            // 校验每个分片路径非空且编号完整
+            List<Integer> missingIndices = new ArrayList<>();
+            for (int i = 0; i < session.getTotalChunks(); i++) {
+                String path = chunkPaths.get(i);
+                if (path == null || path.isEmpty()) {
+                    missingIndices.add(i + 1);
+                } else {
+                    String expectedPrefix = sessionId + "/";
+                    if (!path.startsWith(expectedPrefix)) {
+                        log.warn("【文件合并 - {}】分片路径前缀异常: 会话={}, 索引={}, 路径={}", getStorageType(), sessionId, i + 1, path);
+                    }
+                    String expectedExact = expectedPrefix + (i + 1);
+                    if (!path.equals(expectedExact)) {
+                        log.warn("【文件合并 - {}】分片路径与预期编号不一致: 期望={}, 实际={}", expectedExact, path);
+                    }
+                }
+            }
+            if (!missingIndices.isEmpty()) {
+                throw new BusinessException(ResultCode.VALIDATE_FAILED,
+                        String.format("分片缺失，编号: %s", missingIndices));
+            }
+
+            // 通过对象存储校验分片确实存在
+            try {
+                List<StorageObject> storedChunks = objectStorageService.listObjects(getBucketName(), sessionId + "/", true);
+                java.util.Set<String> existingPaths = storedChunks.stream()
+                        .map(StorageObject::getFilePath)
+                        .collect(java.util.stream.Collectors.toSet());
+                List<Integer> notFound = new ArrayList<>();
+                for (int i = 1; i <= session.getTotalChunks(); i++) {
+                    String expectedPath = sessionId + "/" + i;
+                    if (!existingPaths.contains(expectedPath)) {
+                        notFound.add(i);
+                    }
+                }
+                if (!notFound.isEmpty()) {
+                    log.error("【文件合并 - {}】对象存储缺少分片: 会话={}, 缺失编号={}", getStorageType(), sessionId, notFound);
+                    throw new BusinessException(ResultCode.VALIDATE_FAILED,
+                            String.format("对象存储缺少分片，编号: %s", notFound));
+                }
+            } catch (BusinessException e) {
+                throw e;
+            } catch (Exception e) {
+                log.error("【文件合并 - {}】校验分片存在性失败: 会话={}", getStorageType(), sessionId, e);
+                throw new BusinessException(ResultCode.FILE_UPLOAD_FAILED, "校验分片存在性失败: " + e.getMessage(), e);
             }
 
             // 构建最终文件路径

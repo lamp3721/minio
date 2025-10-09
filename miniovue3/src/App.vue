@@ -7,13 +7,17 @@
         :router="true"
         @select="handleSelect"
     >
-      <el-menu-item index="/improved">
+      <el-menu-item index="/upload" class="main-menu-item">
         <el-icon><Star /></el-icon>
-        改进版本
+        文件上传管理
       </el-menu-item>
-      <el-menu-item index="/private">私有文件库</el-menu-item>
-      <el-menu-item index="/public">公共资源库</el-menu-item>
-      <el-menu-item index="/icon-test">图标测试</el-menu-item>
+      <el-sub-menu index="legacy">
+        <template #title>
+          <span>旧版本 (兼容性)</span>
+        </template>
+        <el-menu-item index="/private-legacy">私有文件库 (旧版)</el-menu-item>
+        <el-menu-item index="/public-legacy">公共资源库 (旧版)</el-menu-item>
+      </el-sub-menu>
     </el-menu>
     <div class="content-container">
       <router-view></router-view>
@@ -76,4 +80,21 @@ body {
   justify-content: space-between;
   align-items: center;
 }
+
+/* 主菜单项样式 */
+.main-menu-item {
+  font-weight: 600;
+  background: linear-gradient(135deg, #409eff 0%, #67c23a 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent !important;
+}
+
+.main-menu-item:hover {
+  background: linear-gradient(135deg, #337ecc 0%, #529b2e 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+
+
 </style>
