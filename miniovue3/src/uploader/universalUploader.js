@@ -4,6 +4,15 @@ import { handleFileUploadV2 } from './coreMain';
  * 通用上传客户端，解耦 Vue，适配任意上传组件/库。
  * 提供极简 API：init、upload、onProgress、onComplete。
  */
+/**
+ * 创建通用上传器实例（与框架解耦）
+ * @param {object} [options]
+ * @param {string} options.apiPrefix - 后端接口前缀，如 '/api/assets'
+ * @param {string} [options.folderPath] - 存储子目录，如 'images/'
+ * @param {number} [options.chunkSize] - 分片大小（字节）
+ * @param {number} [options.maxConcurrency] - 并发分片数（1-8）
+ * @returns {{upload:Function,onProgress:Function,onComplete:Function}}
+ */
 export function createUploader(options = {}) {
   const cfg = {
     apiPrefix: options.apiPrefix || '/api/assets',
@@ -15,9 +24,24 @@ export function createUploader(options = {}) {
   let progressHandler = null;
   let completeHandler = null;
 
+  /**
+   * 绑定进度回调
+   * @param {(p:{percentage?:number,status?:string,totalUploadedBytes?:number,fileHash?:string})=>void} fn
+   * @returns uploader
+   */
   const onProgress = (fn) => { progressHandler = fn; return api; };
+  /**
+   * 绑定完成回调
+   * @param {()=>void} fn
+   * @returns uploader
+   */
   const onComplete = (fn) => { completeHandler = fn; return api; };
 
+  /**
+   * 上传文件
+   * @param {File} file
+   * @returns {Promise<object>} 结果：{ isSuccess, fileUrl?, error?, gracefulResetNeeded? }
+   */
   const upload = async (file) => {
     const callbacks = {
       onUploadStarted: () => progressHandler?.({ status: '开始上传' }),
@@ -34,6 +58,13 @@ export function createUploader(options = {}) {
 
 /**
  * 便捷函数：一次性上传并返回结果。
+ */
+/**
+ * 便捷上传（一次性函数）
+ * @param {File} file
+ * @param {object} [options] - 同 createUploader
+ * @param {{onProgress?:(p:any)=>void,onComplete?:()=>void}} [hooks]
+ * @returns {Promise<object>} 上传结果
  */
 export async function uploadFile(file, options = {}, hooks = {}) {
   const uploader = createUploader(options);

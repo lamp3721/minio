@@ -14,6 +14,11 @@ const MAX_CHUNK_RETRIES = 3;
 const MAX_MERGE_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 1000;
 
+/**
+ * 延时辅助函数
+ * @param {number} ms 毫秒数
+ * @returns {Promise<void>}
+ */
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 const shouldRetryChunk = (error) => {
@@ -35,6 +40,14 @@ const shouldRetryMerge = (error) => {
     return false;
 };
 
+/**
+ * 上传单个分片（带指数退避重试）
+ * @param {object} uploaderConfig - 包含 `apiPrefix`、`folderPath` 等
+ * @param {FormData} formData - 包含 `file`、`sessionId`、`chunkNumber`
+ * @param {number} chunkNumber - 分片序号（从 1 开始）
+ * @param {(p:{status?:string})=>void} [onProgress] - 状态回调
+ * @returns {Promise<any>} - 后端返回
+ */
 const uploadChunkWithRetry = async (uploaderConfig, formData, chunkNumber, onProgress) => {
     let attempt = 0;
     // eslint-disable-next-line no-constant-condition
@@ -53,6 +66,15 @@ const uploadChunkWithRetry = async (uploaderConfig, formData, chunkNumber, onPro
     }
 };
 
+/**
+ * 合并分片（带状态校验与指数退避重试）
+ * @param {object} uploaderConfig - 上传器配置
+ * @param {object} mergeData - 合并请求体：{ sessionId, fileName, fileHash, folderPath, expectedChunkCount }
+ * @param {string} sessionId - 会话ID
+ * @param {number} totalChunks - 分片总数
+ * @param {(p:{status?:string})=>void} [onProgress] - 状态回调
+ * @returns {Promise<any>} - 合并结果或 null（秒传）
+ */
 const mergeWithRetry = async (uploaderConfig, mergeData, sessionId, totalChunks, onProgress) => {
     let attempt = 0;
     let lastError;
@@ -92,9 +114,10 @@ const mergeWithRetry = async (uploaderConfig, mergeData, sessionId, totalChunks,
 };
 
 /**
- * @description 计算文件的MD5哈希值。
- * @param {File} file - 需要计算哈希的文件对象。
- * @returns {Promise<string>} 返回文件的MD5哈希字符串。
+ * 计算文件 MD5 哈希（分片读取以降低内存占用）
+ * @param {File} file - 原始文件对象
+ * @param {number} [chunkSize=DEFAULT_CHUNK_SIZE] - 分片大小（字节）
+ * @returns {Promise<string>} 文件 MD5
  */
 const calculateFileHash = (file, chunkSize = DEFAULT_CHUNK_SIZE) => {
     return new Promise((resolve, reject) => {
@@ -129,11 +152,16 @@ const calculateFileHash = (file, chunkSize = DEFAULT_CHUNK_SIZE) => {
 };
 
 /**
- * @description 改进的文件上传核心函数，基于会话管理
- * @param {File} file - 待上传的文件。
- * @param {object} uploaderConfig - 上传器配置。
- * @param {object} [callbacks={}] - 用于进度更新和事件通知的回调函数集合。
- * @returns {Promise<object>} 返回一个包含上传结果的对象。
+ * 会话化分片上传核心（可配置分片大小与并发）
+ * 1) 计算哈希与秒传；2) 初始化会话断点续传；3) 并发上传分片；4) 合并完成。
+ * @param {File} file
+ * @param {object} uploaderConfig - { apiPrefix, folderPath?, chunkSize?, maxConcurrency? }
+ * @param {object} [callbacks]
+ * @param {()=>void} [callbacks.onUploadStarted]
+ * @param {(hash:string)=>void} [callbacks.onHashCalculated]
+ * @param {(p:{percentage?:number,status?:string,totalUploadedBytes?:number})=>void} [callbacks.onProgress]
+ * @param {()=>void} [callbacks.onUploadComplete]
+ * @returns {Promise<{isSuccess:boolean, gracefulResetNeeded?:boolean, fileUrl?:string, error?:string}>}
  */
 export const handleFileUploadV2 = async (file, uploaderConfig, callbacks = {}) => {
     const { onProgress, onUploadComplete, onHashCalculated, onUploadStarted } = callbacks;

@@ -1,62 +1,120 @@
-# 通用上传模块使用说明
+# 通用分片上传模块（会话化）
 
-该模块提供一个与 Vue 解耦的通用上传客户端，以及保留的 Vue 组合式上传器。任何前端上传组件（原生 `<input type="file">`、Element、AntD、React、Svelte 等）都可以通过统一 API 简单调用文件上传。
+本模块为前端提供一个与框架解耦的会话化分片上传能力，支持可配置分片大小、并发数、重试与断点续传。它既可在 Vue 组件中直接使用，也适用于任意框架（React、Svelte、纯 JS）。
 
-## 快速开始（通用客户端）
+## 为什么这样设计
+- 可配置分片与并发：在不同网络与后端限速场景下灵活调优吞吐与稳定性。
+- 会话化上传：通过 `sessionId` 管理上传状态，支持断点续传、秒传与可追踪的合并过程。
+- 解耦的通用客户端：`universalUploader` 提供最小 API 面，易于在任何环境里调用。
+- 健壮的失败重试：分片上传与合并均带指数退避与错误分类，提升整体成功率。
 
+## 会话机制的好处
+- 断点续传：客户端或网络中断后，重新获取会话状态，仅上传缺失分片。
+- 秒传与校验：服务端可基于 `fileHash` 判断是否已存在，直接返回成功，避免重复流量与 CPU 计算。
+- 并发安全：服务端以会话为范围保证分片计数与合并一致性，降低重复与错位风险。
+- 观测与治理：会话可用于审计与监控（上传速率、失败分片、耗时等），便于后端治理与限流策略。
+
+## 快速开始
+
+### 便捷一次性调用
 ```js
-import { createUploader, uploadFile } from '@/uploader';
+import { uploadFile } from './index';
 
-// 方式一：一次性调用
-await uploadFile(file, {
+const res = await uploadFile(file, {
   apiPrefix: '/api/assets',
   folderPath: 'images/',
-  chunkSize: 5 * 1024 * 1024, // 可选，自定义分片大小
-  maxConcurrency: 4,          // 可选，分片并发上传数
+  chunkSize: 5 * 1024 * 1024, // 5MB
+  maxConcurrency: 4,
 }, {
-  onProgress: (p) => console.log(p.percentage, p.status),
-  onComplete: () => console.log('完成'),
+  onProgress: (p) => console.log('progress', p),
+  onComplete: () => console.log('done'),
 });
 
-// 方式二：创建可复用的上传器实例
-const uploader = createUploader({ apiPrefix: '/api/assets', folderPath: 'docs/' });
-uploader
-  .onProgress(p => {
-    // 这里可以更新任何框架的UI，如React setState、Vue ref、Svelte store
-    console.log(p);
-  })
-  .onComplete(() => console.log('完成'));
-await uploader.upload(file);
+if (res.isSuccess) console.log('File URL:', res.fileUrl);
 ```
 
-## Vue 组件内使用（保持兼容）
-
+### 创建可复用实例
 ```js
-import { useChunkUploaderV2 } from '@/uploader';
+import { createUploader } from './index';
 
-const {
-  isUploading, uploadProgress, uploadSpeed,
-  formattedEta, uploadStatus, handleUpload,
-} = useChunkUploaderV2({ apiPrefix: '/api/assets', folderPath: 'videos/' });
+const uploader = createUploader({
+  apiPrefix: '/api/assets',
+  folderPath: 'docs/',
+  chunkSize: 8 * 1024 * 1024,
+  maxConcurrency: 3,
+});
 
-// 调用：handleUpload(file)
+uploader
+  .onProgress((p) => console.log(p))
+  .onComplete(() => console.log('completed'));
+
+const result = await uploader.upload(file);
 ```
 
-## 配置项说明
+### 在 Vue 组件中使用
+```js
+import { useChunkUploaderV2 } from './index';
 
-- `apiPrefix`: 必填，后端接口前缀，例如 `/api/assets`
-- `folderPath`: 选填，目标存储子目录，例如 `images/`
-- `chunkSize`: 选填，分片大小（默认 5MB）
-- `maxConcurrency`: 选填，并发上传分片数（默认 4，最大 8）
+const { upload, state } = useChunkUploaderV2({
+  apiPrefix: '/api/assets',
+  folderPath: 'videos/',
+  chunkSize: 10 * 1024 * 1024,
+  maxConcurrency: 2,
+});
+
+await upload(file);
+// state 中包含 percentage、speed、eta、status、uploadedBytes 等
+```
+
+## 配置项
+- `apiPrefix`：后端接口前缀，例如 `/api/assets`
+- `folderPath`：存储子目录，可选，默认根目录
+- `chunkSize`：分片大小（字节），默认 5MB，可调优
+- `maxConcurrency`：并发上传分片数，建议 2-6 之间权衡带宽与稳定性
 
 ## 进度回调字段
+- `percentage`：整体完成百分比（0-100）
+- `status`：状态字符串（`hashing`、`uploading`、`merging`、`completed` 等）
+- `totalUploadedBytes`：累计已上传字节数（含已存在分片）
+- `speed`：估计上传速率（字节/秒）
+- `eta`：预计剩余时间（秒），基于速度估算
+- `fileHash`：已计算的文件哈希，用于秒传与会话检索
 
-- `percentage`: 0-100 的整数进度
-- `status`: 文本状态，如“正在上传分片: 3 / 20”
-- `totalUploadedBytes`: 已上传字节数（支持断点续传累加）
+## 会话化上传流程
+1. 计算文件哈希（分片读取，内存占用低）
+2. 初始化会话：服务端返回 `sessionId` 与已上传分片集合（用于断点续传）
+3. 并发上传缺失分片：带指数退避重试与失败分类（网络波动、临时错误等）
+4. 会话校验：确保实际上传分片数与预期一致
+5. 合并分片：失败会进行重试；如服务端判定已存在则返回秒传结果
 
-## 断点续传与失败重试
+## 断点续传与重试
+- 重试策略：对临时型错误进行指数退避重试；不可重试错误直接失败并透出原因
+- 断点续传：根据服务端返回的 `uploadedChunks` 跳过已存在分片，仅上传缺失部分
+- 安全合并：合并前校验会话状态，避免缺分片导致损坏
 
-- 会话管理支持断点续传：初始化会话后会返回已上传分片序号列表，未上传的分片会被调度上传
-- 分片上传与合并操作自带指数退避重试
-- 合并失败后保留会话，允许补传分片后再次合并；成功后由定时任务统一清理
+## 并发调优建议
+- 弱网络环境：降低 `maxConcurrency`（1-2），减小 `chunkSize`
+- 高带宽环境：提升 `maxConcurrency`（4-6），适度增大 `chunkSize`
+- 后端限流：适配接口速率限制，观察 429/503 等响应，调小并发与分片
+
+## API 参考
+
+### `createUploader(options)`
+返回一个上传器实例，包含 `upload(file)`、`onProgress(fn)`、`onComplete(fn)`。
+
+### `uploadFile(file, options, hooks)`
+一次性上传函数，适合快捷调用；`hooks` 支持 `onProgress`、`onComplete`。
+
+### `handleFileUploadV2(file, uploaderConfig, callbacks)`
+核心上传函数，提供更细粒度控制；`callbacks` 与通用客户端一致。
+
+## 常见问题
+- Q：为何需要计算 `fileHash`？
+  - A：用于秒传与会话检索；避免重复上传相同内容。
+- Q：并发越高越好吗？
+  - A：不一定，取决于网络与后端限速；需结合观测调优。
+- Q：中途失败怎么办？
+  - A：会话化使得你只需重试缺失分片；合并失败会自动重试。
+
+---
+如需切换现有组件到通用客户端，可参考上述 Quick Start；若你需要示例 PR，我可以直接为 `FileManagerComponent.vue` 接入并演示。
