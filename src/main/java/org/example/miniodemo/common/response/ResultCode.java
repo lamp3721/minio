@@ -29,7 +29,10 @@ public enum ResultCode {
     FILE_EXISTS(1004, "文件已存在"),
     BUCKET_CREATION_FAILED(1005, "存储桶创建失败"),
     MERGE_FAILED(1006, "文件合并失败"),
-    FILE_NOT_EXIST(1007, "文件不存在");
+    FILE_NOT_EXIST(1007, "文件不存在"),
+    MERGE_INVALID_PART(1008, "分片无效或顺序错误"),
+    MERGE_SOURCE_NOT_FOUND(1009, "合并时源分片丢失"),
+    UPLOAD_SESSION_STATE_MISMATCH(1010, "上传会话状态不匹配");
 
 
     /**

@@ -109,7 +109,18 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
             log.info("【文件合并 - {}】对象存储操作成功。最终对象: '{}'。", getStorageType(), finalFilePath);
         } catch (Exception e) {
             log.error("【文件合并 - {}】对象存储操作失败。最终对象: '{}'。", getStorageType(), finalFilePath, e);
-            throw new BusinessException(ResultCode.MERGE_FAILED, "对象存储操作失败", e);
+            // 优雅地处理 MinIO 特定异常
+            if (e instanceof io.minio.errors.ErrorResponseException) {
+                io.minio.errors.ErrorResponseException ere = (io.minio.errors.ErrorResponseException) e;
+                String code = ere.errorResponse().code();
+                if ("InvalidPart".equals(code) || "InvalidPartOrder".equals(code)) {
+                    throw new BusinessException(ResultCode.MERGE_INVALID_PART, "分片无效或顺序错误", e);
+                } else if ("NoSuchKey".equals(code)) {
+                    throw new BusinessException(ResultCode.MERGE_SOURCE_NOT_FOUND, "源分片丢失", e);
+                }
+            }
+            // 对于其他所有异常，或非特定 MinIO 异常，可以抛出一个更通用的业务异常
+            throw new BusinessException(ResultCode.UPLOAD_SESSION_STATE_MISMATCH, "文件合并失败，请检查上传状态或重试", e);
         }
 
         // 3. 构建元数据对象
