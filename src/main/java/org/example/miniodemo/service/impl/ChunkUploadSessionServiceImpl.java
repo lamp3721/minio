@@ -39,14 +39,16 @@ public class ChunkUploadSessionServiceImpl implements ChunkUploadSessionService 
         Optional<ChunkUploadSession> existingSession = getSession(sessionId);
         if (existingSession.isPresent()) {
             ChunkUploadSession session = existingSession.get();
-            // 验证会话是否有效
-            if (session.getExpiresAt().isAfter(LocalDateTime.now()) && 
-                session.getStatus() != ChunkUploadStatus.EXPIRED) {
-                log.info("【会话管理】找到有效的上传会话: {}", sessionId);
+            // 仅当会话未过期且仍处于可上传状态时复用；
+            // 对于 MERGED/READY_TO_MERGE/MERGING/FAILED/EXPIRED 等状态不再复用，直接删除并创建新会话。
+            boolean notExpired = session.getExpiresAt().isAfter(LocalDateTime.now());
+            boolean reusableStatus = session.getStatus() == ChunkUploadStatus.UPLOADING
+                    || session.getStatus() == ChunkUploadStatus.INIT;
+            if (notExpired && reusableStatus) {
+                log.info("【会话管理】找到可复用的上传会话: {}", sessionId);
                 return session;
             } else {
-                // 会话已过期，删除旧会话
-                log.info("【会话管理】删除过期会话: {}", sessionId);
+                log.info("【会话管理】旧会话不可复用，删除并重建: {}，状态={}，过期={}", sessionId, session.getStatus(), !notExpired);
                 deleteSession(sessionId);
             }
         }
