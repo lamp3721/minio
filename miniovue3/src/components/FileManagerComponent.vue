@@ -36,6 +36,7 @@
           <div class="upload-stats">
             <span>速度: {{ formattedUploadSpeed }}</span>
             <span>耗时: {{ formattedElapsedTime }}</span>
+            <span>剩余: {{ formattedEta }}</span>
             <span v-if="sessionId">会话: {{ sessionId.substring(0, 8) }}...</span>
           </div>
         </div>
@@ -130,6 +131,7 @@ const {
   formattedUploadSpeed,
   elapsedTime,
   formattedElapsedTime,
+  formattedEta,
   fileHash,
   sessionId,
   uploadStatus,

@@ -2,7 +2,7 @@ import { ref, computed } from 'vue';
 import { handleFileUploadV2 } from './coreMain';
 
 /**
- * @description 改进的Vue 3组合式函数，基于会话管理的分片上传
+ * @description 改进的Vue 3组合式函数，基于会话管理的分片上传（含速度平滑与预计剩余时间）
  * @param {object} uploaderConfig - 上传器配置，包含API前缀、文件夹路径等。
  * @returns {object} 返回一个包含上传状态、进度、控制函数等内容的对象。
  */
@@ -22,10 +22,16 @@ export function useChunkUploaderV2(uploaderConfig) {
     const uploadProgress = ref(0);
 
     /**
-     * @description 上传速度，单位为字节/秒。
+     * @description 上传速度，单位为字节/秒（EMA平滑）。
      * @type {import('vue').Ref<number>}
      */
     const uploadSpeed = ref(0);
+
+    /**
+     * @description 预计剩余时间（秒）。
+     * @type {import('vue').Ref<number>}
+     */
+    const etaSeconds = ref(0);
 
     /**
      * @description 文件哈希值。
@@ -69,6 +75,11 @@ export function useChunkUploaderV2(uploaderConfig) {
      */
     let lastUploadedBytes = 0;
 
+    // EMA 平滑系数 (0-1)，越大越敏感
+    const EMA_ALPHA = 0.3;
+    // 当前文件总字节数，用于 ETA 计算
+    let currentFileSize = 0;
+
     // --- 计算属性 ---
 
     /**
@@ -77,7 +88,6 @@ export function useChunkUploaderV2(uploaderConfig) {
      */
     const formattedUploadSpeed = computed(() => {
         if (uploadSpeed.value === 0) return '0 KB/s';
-        
         if (uploadSpeed.value < 1024 * 1024) {
             return `${(uploadSpeed.value / 1024).toFixed(1)} KB/s`;
         } else {
@@ -95,6 +105,17 @@ export function useChunkUploaderV2(uploaderConfig) {
         return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     });
 
+    /**
+     * @description 格式化后的预计剩余时间，格式为 "分:秒"。
+     * @type {import('vue').ComputedRef<string>}
+     */
+    const formattedEta = computed(() => {
+        const eta = Math.max(0, Math.floor(etaSeconds.value));
+        const minutes = Math.floor(eta / 60);
+        const seconds = eta % 60;
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    });
+
     // --- 内部辅助函数 ---
 
     /**
@@ -105,6 +126,7 @@ export function useChunkUploaderV2(uploaderConfig) {
         elapsedTime.value = 0; // 重置耗时
         lastProgressTime = Date.now(); // 记录开始时间
         lastUploadedBytes = 0; // 重置已上传字节
+        etaSeconds.value = 0; // 重置预计剩余时间
         timer = setInterval(() => {
             elapsedTime.value++;
         }, 1000);
@@ -128,6 +150,7 @@ export function useChunkUploaderV2(uploaderConfig) {
         uploadProgress.value = 0;
         uploadSpeed.value = 0;
         elapsedTime.value = 0;
+        etaSeconds.value = 0;
         uploadStatus.value = '';
         fileHash.value = '';
         sessionId.value = '';
@@ -146,12 +169,13 @@ export function useChunkUploaderV2(uploaderConfig) {
     // --- 核心上传处理函数 ---
 
     /**
-     * @description 处理文件上传的主函数，调用core-v2.js中的核心逻辑并管理UI状态。
+     * @description 处理文件上传的主函数，调用coreMain.js中的核心逻辑并管理UI状态。
      * @param {File} file - 用户选择的待上传文件。
      * @returns {Promise<object>} 上传结果
      */
     const handleUpload = async (file) => {
         if (!file) return { isSuccess: false, error: '文件不能为空' };
+        currentFileSize = file.size;
 
         // 定义回调函数，用于在核心上传逻辑中更新UI
         const callbacks = {
@@ -169,14 +193,20 @@ export function useChunkUploaderV2(uploaderConfig) {
                 if (percentage !== undefined) uploadProgress.value = percentage;
                 if (status) uploadStatus.value = status;
 
-                // --- 上传速度计算 ---
+                // --- 上传速度计算（EMA平滑）与 ETA 估算 ---
                 const now = Date.now();
                 if (totalUploadedBytes && lastProgressTime) {
                     const timeDiff = (now - lastProgressTime) / 1000; // 秒
                     if (timeDiff > 0.5) { // 每隔0.5秒以上更新一次速度
                         const bytesDiff = totalUploadedBytes - lastUploadedBytes;
-                        const speed = bytesDiff / timeDiff; // 字节/秒
-                        uploadSpeed.value = Math.round(speed);
+                        const instantSpeed = bytesDiff / timeDiff; // 字节/秒
+                        if (uploadSpeed.value === 0) {
+                            uploadSpeed.value = Math.round(instantSpeed);
+                        } else {
+                            uploadSpeed.value = Math.round(EMA_ALPHA * instantSpeed + (1 - EMA_ALPHA) * uploadSpeed.value);
+                        }
+                        const remainingBytes = Math.max(0, currentFileSize - totalUploadedBytes);
+                        etaSeconds.value = uploadSpeed.value > 0 ? remainingBytes / uploadSpeed.value : 0;
                         lastProgressTime = now;
                         lastUploadedBytes = totalUploadedBytes;
                     }
@@ -189,6 +219,7 @@ export function useChunkUploaderV2(uploaderConfig) {
             onUploadComplete: () => {
                 isUploading.value = false;
                 uploadSpeed.value = 0; // 上传完成，速度归零
+                etaSeconds.value = 0;
                 stopTimer();
             },
         };
@@ -212,6 +243,7 @@ export function useChunkUploaderV2(uploaderConfig) {
         formattedUploadSpeed,
         elapsedTime,
         formattedElapsedTime,
+        formattedEta,
         fileHash,
         sessionId,
         uploadStatus,
