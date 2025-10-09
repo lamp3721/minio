@@ -6,7 +6,8 @@ import { storageService } from '../services/storageService';
  * MinIO官方推荐分片大小为5MB到5GB之间，5MB是最小且常用的值。
  * @type {number}
  */
-const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
+// 默认分片大小 5MB，可通过 uploaderConfig.chunkSize 覆盖
+const DEFAULT_CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
 
 // 重试相关配置
 const MAX_CHUNK_RETRIES = 3;
@@ -95,11 +96,11 @@ const mergeWithRetry = async (uploaderConfig, mergeData, sessionId, totalChunks,
  * @param {File} file - 需要计算哈希的文件对象。
  * @returns {Promise<string>} 返回文件的MD5哈希字符串。
  */
-const calculateFileHash = (file) => {
+const calculateFileHash = (file, chunkSize = DEFAULT_CHUNK_SIZE) => {
     return new Promise((resolve, reject) => {
         const spark = new SparkMD5.ArrayBuffer();
         const fileReader = new FileReader();
-        const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+        const totalChunks = Math.ceil(file.size / chunkSize);
         let currentChunk = 1;
 
         fileReader.onload = (e) => {
@@ -118,8 +119,8 @@ const calculateFileHash = (file) => {
         };
 
         function loadNext() {
-            const start = (currentChunk - 1) * CHUNK_SIZE;
-            const end = Math.min(start + CHUNK_SIZE, file.size);
+            const start = (currentChunk - 1) * chunkSize;
+            const end = Math.min(start + chunkSize, file.size);
             fileReader.readAsArrayBuffer(file.slice(start, end));
         }
 
@@ -137,13 +138,16 @@ const calculateFileHash = (file) => {
 export const handleFileUploadV2 = async (file, uploaderConfig, callbacks = {}) => {
     const { onProgress, onUploadComplete, onHashCalculated, onUploadStarted } = callbacks;
 
+    const CHUNK_SIZE = uploaderConfig?.chunkSize || DEFAULT_CHUNK_SIZE;
+    const MAX_CONCURRENCY = Math.max(1, Math.min(8, uploaderConfig?.maxConcurrency || 4));
+
     // 触发上传开始的回调
     onUploadStarted?.();
 
     // 步骤 1: 计算文件哈希
     let fileHash;
     try {
-        fileHash = await calculateFileHash(file);
+        fileHash = await calculateFileHash(file, CHUNK_SIZE);
         onHashCalculated?.(fileHash);
     } catch (e) {
         console.error('计算文件哈希失败:', e);
@@ -215,7 +219,6 @@ export const handleFileUploadV2 = async (file, uploaderConfig, callbacks = {}) =
     }
 
     // 步骤 3: 分片上传
-    const uploadPromises = [];
     const completedChunks = new Set();
 
     // 获取当前会话状态
@@ -232,32 +235,38 @@ export const handleFileUploadV2 = async (file, uploaderConfig, callbacks = {}) =
         // 将已上传的分片添加到完成集合中
         uploadedChunkNumbers.forEach(num => completedChunks.add(num));
         
+        // 并发调度上传任务
+        const queue = [];
         for (let i = 1; i <= totalChunks; i++) {
-            // 跳过已上传的分片
-            if (uploadedChunkNumbers.includes(i)) continue;
+            if (uploadedChunkNumbers.includes(i)) continue; // 跳过已上传
+            queue.push(i);
+        }
 
-            const chunk = file.slice((i - 1) * CHUNK_SIZE, i * CHUNK_SIZE);
+        const runNext = async () => {
+            const next = queue.shift();
+            if (next === undefined) return;
+
+            const chunk = file.slice((next - 1) * CHUNK_SIZE, next * CHUNK_SIZE);
             const formData = new FormData();
             formData.append('file', chunk);
             formData.append('sessionId', sessionId);
-            formData.append('chunkNumber', i.toString());
+            formData.append('chunkNumber', next.toString());
 
-            const promise = (async () => {
-                await uploadChunkWithRetry(uploaderConfig, formData, i, onProgress);
-                completedChunks.add(i);
-                const uploadedCount = completedChunks.size;
-                const totalUploadedBytes = uploadedCount * CHUNK_SIZE;
-                onProgress?.({
-                    percentage: Math.floor((uploadedCount / totalChunks) * 100),
-                    status: `正在上传分片: ${uploadedCount} / ${totalChunks}`,
-                    totalUploadedBytes: totalUploadedBytes > file.size ? file.size : totalUploadedBytes
-                });
-            })();
-            uploadPromises.push(promise);
-        }
+            await uploadChunkWithRetry(uploaderConfig, formData, next, onProgress);
+            completedChunks.add(next);
+            const uploadedCount = completedChunks.size;
+            const totalUploadedBytes = uploadedCount * CHUNK_SIZE;
+            onProgress?.({
+                percentage: Math.floor((uploadedCount / totalChunks) * 100),
+                status: `正在上传分片: ${uploadedCount} / ${totalChunks}`,
+                totalUploadedBytes: totalUploadedBytes > file.size ? file.size : totalUploadedBytes
+            });
 
-        // 等待所有分片上传完成
-        await Promise.all(uploadPromises);
+            return runNext();
+        };
+
+        const workers = Array.from({ length: Math.min(MAX_CONCURRENCY, queue.length) }, () => runNext());
+        await Promise.all(workers);
         
         // 验证所有分片都已上传
         if (completedChunks.size !== totalChunks) {
