@@ -12,8 +12,8 @@ public interface PrivateFileService extends AbstractChunkedFile {
     List<FileDetailDto> listPrivateFiles();
 
     // 获取私有文件的预签名下载URL（推荐的下载方式）。
-    String getPresignedPrivateDownloadUrl(String objectName) throws Exception;
+    String getPresignedPrivateDownloadUrl(String objectName) ;
 
     // 获取用于代理下载的私有文件输入流。
-    InputStream downloadPrivateFile(String filePath) throws Exception;
+    InputStream downloadPrivateFile(String filePath);
 }

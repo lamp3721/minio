@@ -14,6 +14,7 @@ public enum ResultCode {
 
     /* 客户端错误 */
     BAD_REQUEST(400, "无效的请求"),
+    VALIDATE_FAILED(400, "参数校验失败"),
     UNAUTHORIZED(401, "未授权"),
     FORBIDDEN(403, "禁止访问"),
     NOT_FOUND(404, "资源不存在"),
@@ -44,4 +45,4 @@ public enum ResultCode {
         this.code = code;
         this.message = message;
     }
-} 
+}

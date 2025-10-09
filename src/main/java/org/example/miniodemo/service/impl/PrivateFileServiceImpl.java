@@ -9,6 +9,8 @@ import org.example.miniodemo.dto.FileDetailDto;
 import org.example.miniodemo.repository.FileMetadataRepository;
 import org.example.miniodemo.service.AsyncFileService;
 import org.example.miniodemo.service.PrivateFileService;
+import org.example.miniodemo.common.response.ResultCode;
+import org.example.miniodemo.exception.BusinessException;
 import org.example.miniodemo.service.storage.ObjectStorageService;
 import org.springframework.stereotype.Service;
 import org.example.miniodemo.config.MinioConfig;
@@ -72,22 +74,22 @@ public class PrivateFileServiceImpl extends AbstractChunkedFileServiceImpl imple
         return metadataList.stream()
                 .filter(Objects::nonNull)
                 .map(metadata -> {
+                    String url = null;
                     try {
-                        String url = getPresignedPrivateDownloadUrl(metadata.getFilePath());
-                        return FileDetailDto.builder()
-                                .name(metadata.getOriginalFilename())
-                                .filePath(metadata.getFilePath())
-                                .size(metadata.getFileSize())
-                                .contentType(metadata.getContentType())
-                                .visitCount(metadata.getVisitCount())
-                                .url(url)
-                                .build();
-                    } catch (Exception e) {
+                        url = getPresignedPrivateDownloadUrl(metadata.getFilePath());
+                    } catch (BusinessException e) {
                         log.error("获取文件 {} 的预签名URL失败", metadata.getFilePath(), e);
-                        return null; // 或者返回一个不带URL的DTO
+                        // 即使某个URL获取失败，也返回文件的其他信息
                     }
+                    return FileDetailDto.builder()
+                            .name(metadata.getOriginalFilename())
+                            .filePath(metadata.getFilePath())
+                            .size(metadata.getFileSize())
+                            .contentType(metadata.getContentType())
+                            .visitCount(metadata.getVisitCount())
+                            .url(url) // URL可能为null
+                            .build();
                 })
-                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
     }
 
@@ -97,19 +99,23 @@ public class PrivateFileServiceImpl extends AbstractChunkedFileServiceImpl imple
      *
      * @param objectName 文件的对象路径。
      * @return 一个有访问时限的下载URL。
-     * @throws Exception 如果生成URL时出错。
      */
     @Override
-    public String getPresignedPrivateDownloadUrl(String objectName) throws Exception {
-        // 异步更新最后访问时间
-        asyncFileService.updateLastAccessedTime(objectName);
+    public String getPresignedPrivateDownloadUrl(String objectName) {
+        try {
+            // 异步更新最后访问时间
+            asyncFileService.updateLastAccessedTime(objectName);
 
-        return objectStorageService.getPresignedDownloadUrl(
-                getBucketName(),
-                objectName,
-                minioConfig.getUrlExpiryMinutes(),
-                TimeUnit.MINUTES
-        );
+            return objectStorageService.getPresignedDownloadUrl(
+                    getBucketName(),
+                    objectName,
+                    minioConfig.getUrlExpiryMinutes(),
+                    TimeUnit.MINUTES
+            );
+        } catch (Exception e) {
+            log.error("为文件 '{}' 生成预签名URL时出错", objectName, e);
+            throw new BusinessException(ResultCode.FILE_DOWNLOAD_FAILED, "获取下载链接失败");
+        }
     }
 
     /**
@@ -120,14 +126,18 @@ public class PrivateFileServiceImpl extends AbstractChunkedFileServiceImpl imple
      *
      * @param filePath 文件在存储桶中的相对路径。
      * @return 返回文件内容的输入流。
-     * @throws Exception 当下载过程中发生异常时抛出。
      */
     @Override
-    public InputStream downloadPrivateFile(String filePath) throws Exception {
-        // 异步更新文件最后访问时间，避免阻塞下载操作
-        asyncFileService.updateLastAccessedTime(filePath);
-        // 从对象存储服务获取文件输入流
-        return objectStorageService.download(getBucketName(), filePath);
+    public InputStream downloadPrivateFile(String filePath) {
+        try {
+            // 异步更新文件最后访问时间，避免阻塞下载操作
+            asyncFileService.updateLastAccessedTime(filePath);
+            // 从对象存储服务获取文件输入流
+            return objectStorageService.download(getBucketName(), filePath);
+        } catch (Exception e) {
+            log.error("下载私有文件 '{}' 时出错", filePath, e);
+            throw new BusinessException(ResultCode.FILE_DOWNLOAD_FAILED, "文件下载失败");
+        }
     }
 
 }

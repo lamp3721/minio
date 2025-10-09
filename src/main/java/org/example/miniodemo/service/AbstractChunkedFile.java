@@ -13,13 +13,13 @@ public interface AbstractChunkedFile {
     Optional<FileMetadata> checkFileExists(String fileHash);
 
     // 上传一个分片
-    String uploadChunk(MultipartFile file, String batchId, Integer chunkNumber) throws Exception;
+    String uploadChunk(MultipartFile file, String batchId, Integer chunkNumber) ;
 
     // 合并分片文件
-    FileMetadata mergeChunks(MergeRequestDto mergeRequestDto) throws Exception;
+    FileMetadata mergeChunks(MergeRequestDto mergeRequestDto) ;
 
     // 删除一个文件及其元数据。
-    void deleteFile(String filePath) throws Exception;
+    void deleteFile(String filePath);
 
     /**
      * 直接上传单个文件，适用于小文件。
@@ -29,5 +29,5 @@ public interface AbstractChunkedFile {
      * @return 文件的元数据
      * @throws Exception 上传过程中发生错误
      */
-    FileMetadata uploadFile(String folderPath,MultipartFile file, String fileHash) throws Exception;
+    FileMetadata uploadFile(String folderPath,MultipartFile file, String fileHash) ;
 }

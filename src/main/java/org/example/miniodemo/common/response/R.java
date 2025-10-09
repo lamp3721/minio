@@ -43,6 +43,10 @@ public class R<T> implements Serializable {
         return new R<>(resultCode.getCode(), resultCode.getMessage(), null);
     }
 
+    public static <T> R<T> error(ResultCode resultCode, String message) {
+        return new R<>(resultCode.getCode(), message, null);
+    }
+
     public static <T> R<T> error(ResultCode resultCode, T data) {
         return new R<>(resultCode.getCode(), resultCode.getMessage(), data);
     }
@@ -50,4 +54,4 @@ public class R<T> implements Serializable {
     public static <T> R<T> error(int code, String message) {
         return new R<>(code, message, null);
     }
-} 
+}

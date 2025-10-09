@@ -53,13 +53,8 @@ public class PrivateFileController extends BaseFileController {
      */
     @GetMapping("/list")
     public R<List<FileDetailDto>> listPrivateFiles() {
-        try {
-            List<FileDetailDto> fileList = privateFileService.listPrivateFiles();
-            return R.success(fileList);
-        } catch (Exception e) {
-            log.error("获取私有文件列表失败: {}", e.getMessage(), e);
-            return R.error(ResultCode.INTERNAL_SERVER_ERROR);
-        }
+        List<FileDetailDto> fileList = privateFileService.listPrivateFiles();
+        return R.success(fileList);
     }
 
     /**
@@ -70,13 +65,8 @@ public class PrivateFileController extends BaseFileController {
      */
     @PostMapping("/check")
     public R<FileExistsDto> checkFileExists(@RequestBody CheckRequestDto checkRequest) {
-        try {
-            boolean exists = privateFileService.checkFileExists(checkRequest.getFileHash()).isPresent();
-            return R.success(new FileExistsDto(exists));
-        } catch (Exception e) {
-            log.error("检查文件是否存在失败: {}", e.getMessage(), e);
-            return R.success(new FileExistsDto(false));
-        }
+        boolean exists = privateFileService.checkFileExists(checkRequest.getFileHash()).isPresent();
+        return R.success(new FileExistsDto(exists));
     }
 
     /**
@@ -87,13 +77,8 @@ public class PrivateFileController extends BaseFileController {
      */
     @PostMapping("/upload/merge")
     public R<String> mergePrivateChunks(@RequestBody MergeRequestDto mergeRequest) {
-        try {
-            privateFileService.mergeChunks(mergeRequest);
-            return R.success("文件合并成功: " + mergeRequest.getFileName());
-        } catch (Exception e) {
-            log.error("私有文件分片合并失败: {}", e.getMessage(), e);
-            return R.error(ResultCode.MERGE_FAILED, "文件合并失败: " + e.getMessage());
-        }
+        privateFileService.mergeChunks(mergeRequest);
+        return R.success("文件合并成功: " + mergeRequest.getFileName());
     }
 
     /**
@@ -104,17 +89,9 @@ public class PrivateFileController extends BaseFileController {
      */
     @GetMapping("/download-url")
     public R<String> getPrivatePresignedDownloadUrl(@RequestParam("filePath") String filePath) {
-        try {
-            String safeFilePath = PathValidationUtil.clean(filePath);
-            String url = privateFileService.getPresignedPrivateDownloadUrl(safeFilePath);
-            return R.success(url);
-        } catch (IllegalArgumentException e) {
-            log.warn("检测到无效的私有文件路径: {}", filePath, e);
-            return R.error(ResultCode.BAD_REQUEST, e.getMessage());
-        } catch (Exception e) {
-            log.error("获取私有文件预签名URL失败: {}", e.getMessage(), e);
-            return R.error(ResultCode.FILE_DOWNLOAD_FAILED, "获取 URL 失败: " + e.getMessage());
-        }
+        String safeFilePath = PathValidationUtil.clean(filePath);
+        String url = privateFileService.getPresignedPrivateDownloadUrl(safeFilePath);
+        return R.success(url);
     }
 
     /**
@@ -127,26 +104,17 @@ public class PrivateFileController extends BaseFileController {
      */
     @GetMapping("/download")
     public ResponseEntity<Resource> downloadPrivateFile(@RequestParam("filePath") String filePath) {
-        try {
-            String safeFileName = PathValidationUtil.clean(filePath);
-            InputStream inputStream = privateFileService.downloadPrivateFile(safeFileName);
-            String encodedFileName = URLEncoder.encode(safeFileName, StandardCharsets.UTF_8).replaceAll("\\+", "%20");
+        String safeFileName = PathValidationUtil.clean(filePath);
+        InputStream inputStream = privateFileService.downloadPrivateFile(safeFileName);
+        String encodedFileName = URLEncoder.encode(safeFileName, StandardCharsets.UTF_8).replaceAll("\\+", "%20");
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + encodedFileName + "\"");
-            headers.add(HttpHeaders.CONTENT_TYPE, "application/octet-stream");
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + encodedFileName + "\"");
+        headers.add(HttpHeaders.CONTENT_TYPE, "application/octet-stream");
 
-            return ResponseEntity.ok()
-                    .headers(headers)
-                    .body(new InputStreamResource(inputStream));
-
-        } catch (IllegalArgumentException e) {
-            log.warn("检测到无效的私有文件路径: {}", filePath, e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
-        } catch (Exception e) {
-            log.error("私有文件下载失败: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
-        }
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(new InputStreamResource(inputStream));
     }
 
     /**
@@ -164,12 +132,7 @@ public class PrivateFileController extends BaseFileController {
             return R.error(ResultCode.BAD_REQUEST, "文件和文件哈希不能为空");
         }
 
-        try {
-            log.info("【直接上传-私有】接收到文件上传请求: 文件名 [{}], 哈希 [{}]", file.getOriginalFilename(), fileUploadDto.getFileHash());
-            return R.success(getService().uploadFile(fileUploadDto.getFolderPath(),file, fileUploadDto.getFileHash()));
-        } catch (Exception e) {
-            log.error("【直接上传-私有】文件上传失败: {}", e.getMessage(), e);
-            return R.error(ResultCode.FILE_UPLOAD_FAILED, "文件上传失败: " + e.getMessage());
-        }
+        log.info("【直接上传-私有】接收到文件上传请求: 文件名 [{}], 哈希 [{}]", file.getOriginalFilename(), fileUploadDto.getFileHash());
+        return R.success(getService().uploadFile(fileUploadDto.getFolderPath(),file, fileUploadDto.getFileHash()));
     }
 }

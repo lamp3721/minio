@@ -2,20 +2,22 @@ package org.example.miniodemo.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.miniodemo.common.response.ResultCode;
 import org.example.miniodemo.common.util.FilePathUtil;
 import org.example.miniodemo.domain.FileMetadata;
-import org.example.miniodemo.domain.StorageObject;
 import org.example.miniodemo.domain.StorageType;
 import org.example.miniodemo.dto.MergeRequestDto;
+import org.example.miniodemo.event.EventPublisher;
+import org.example.miniodemo.event.FileMergedEvent;
+import org.example.miniodemo.exception.BusinessException;
 import org.example.miniodemo.repository.FileMetadataRepository;
 import org.example.miniodemo.service.AbstractChunkedFile;
 import org.example.miniodemo.service.AsyncFileService;
 import org.example.miniodemo.service.storage.ObjectStorageService;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import org.example.miniodemo.event.EventPublisher;
-import org.example.miniodemo.event.FileMergedEvent;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.Comparator;
 import java.util.List;
@@ -63,9 +65,8 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
      * @param file        文件
      * @param batchId     批次ID
      * @param chunkNumber 分片序号
-     * @throws Exception 如果上传分片时发生错误。
      */
-    public String uploadChunk(MultipartFile file, String batchId, Integer chunkNumber) throws Exception {
+    public String uploadChunk(MultipartFile file, String batchId, Integer chunkNumber) {
         String filePath = batchId + "/" + chunkNumber;
         try (InputStream inputStream = file.getInputStream()) {
             objectStorageService.upload(
@@ -75,6 +76,9 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
                     file.getSize(),
                     file.getContentType()
             );
+        } catch (Exception e) {
+            log.error("【分片上传 - {}】分片上传失败，文件路径: '{}'", getStorageType(), filePath, e);
+            throw new BusinessException(ResultCode.FILE_UPLOAD_FAILED, "分片上传失败", e);
         }
         return filePath;
     }
@@ -86,10 +90,8 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
      * 后续的数据库持久化和分片清理将由事件监听器异步处理。
      *
      * @return 合并后的文件元数据（此时尚未持久化）。
-     * @throws Exception 如果分片列表为空或合并失败。
      */
-    public FileMetadata mergeChunks(MergeRequestDto mergeRequestDto) throws Exception {
-        // 1. 分片  cf17ce6f77e88fefd44ccb2f0e751967/0  加上桶即使完整路径
+    public FileMetadata mergeChunks(MergeRequestDto mergeRequestDto) {
         // 1. 从DTO获取分片路径并按编号排序
         List<String> sourceObjectNames = mergeRequestDto.getChunkPaths().stream()
                 .sorted(Comparator.comparing(s -> Integer.parseInt(s.substring(s.lastIndexOf('/') + 1))))
@@ -97,7 +99,7 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
 
         // 如果分片列表为空，则抛出异常
         if (sourceObjectNames.isEmpty()) {
-            throw new Exception("分片列表为空，无法合并。批次ID: " + mergeRequestDto.getBatchId());
+            throw new BusinessException(ResultCode.VALIDATE_FAILED, "分片列表为空，无法合并。批次ID: " + mergeRequestDto.getBatchId());
         }
 
         // 2. 构建最终对象路径并合并
@@ -107,7 +109,7 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
             log.info("【文件合并 - {}】对象存储操作成功。最终对象: '{}'。", getStorageType(), finalFilePath);
         } catch (Exception e) {
             log.error("【文件合并 - {}】对象存储操作失败。最终对象: '{}'。", getStorageType(), finalFilePath, e);
-            throw new Exception("对象存储操作失败", e);
+            throw new BusinessException(ResultCode.MERGE_FAILED, "对象存储操作失败", e);
         }
 
         // 3. 构建元数据对象
@@ -125,22 +127,26 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
      * 删除一个文件及其元数据。
      *
      * @param filePath 需要删除的文件的对象路径。
-     * @throws Exception 如果删除过程中发生错误。
      */
     @Transactional
-    public void deleteFile(String filePath) throws Exception {
-        // 1. 从对象存储中删除文件
-        objectStorageService.delete(getBucketName(), filePath);
+    public void deleteFile(String filePath) {
+        try {
+            // 1. 从对象存储中删除文件
+            objectStorageService.delete(getBucketName(), filePath);
 
-        // 2. 从数据库中删除元数据
-        String hash = FilePathUtil.extractHashFromPath(filePath);
-        if (hash != null) {
-            fileMetadataRepository.deleteByHash(hash, getStorageType());
-            log.info("【文件删除 - {}】成功删除文件元数据，Hash: {}", getStorageType(), hash);
-        } else {
-            log.warn("【文件删除 - {}】无法从路径中提取Hash，可能未删除元数据: {}", getStorageType(), filePath);
+            // 2. 从数据库中删除元数据
+            String hash = FilePathUtil.extractHashFromPath(filePath);
+            if (hash != null) {
+                fileMetadataRepository.deleteByHash(hash, getStorageType());
+                log.info("【文件删除 - {}】成功删除文件元数据，Hash: {}", getStorageType(), hash);
+            } else {
+                log.warn("【文件删除 - {}】无法从路径中提取Hash，可能未删除元数据: {}", getStorageType(), filePath);
+            }
+            log.info("【文件删除 - {}】成功删除对象: {}", getStorageType(), filePath);
+        } catch (Exception e) {
+            log.error("【文件删除 - {}】删除对象存储文件失败: '{}'", getStorageType(), filePath, e);
+            throw new BusinessException(ResultCode.FILE_DELETE_FAILED, "文件删除失败", e);
         }
-        log.info("【文件删除 - {}】成功删除对象: {}", getStorageType(), filePath);
     }
 
 
@@ -152,11 +158,10 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
      * @param file     上传的文件
      * @param fileHash 文件的哈希值
      * @return 文件的元数据
-     * @throws Exception 上传过程中发生错误
      */
     @Override
     @Transactional
-    public FileMetadata uploadFile(String folderPath,MultipartFile file, String fileHash) throws Exception {
+    public FileMetadata uploadFile(String folderPath, MultipartFile file, String fileHash) {
         log.info("【直接上传 - {}】开始处理直接上传请求，文件名: {}，哈希: {}", getStorageType(), file.getOriginalFilename(), fileHash);
 
         // 1. 构建最终对象路径
@@ -175,7 +180,7 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
             log.info("【直接上传 - {}】文件已成功上传到对象存储。最终对象: '{}'。", getStorageType(), finalFilePath);
         } catch (Exception e) {
             log.error("【直接上传 - {}】文件上传到对象存储时失败。最终对象: '{}'。", getStorageType(), finalFilePath, e);
-            throw new Exception("文件上传失败", e);
+            throw new BusinessException(ResultCode.FILE_UPLOAD_FAILED, "文件上传失败", e);
         }
 
         // 3. 构建并保存文件元数据
@@ -194,11 +199,6 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
 
         return metadata;
     }
-
-
-
-
-
 
     /**
      * 构建文件元数据
