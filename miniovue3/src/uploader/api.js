@@ -1,7 +1,20 @@
 import axios from 'axios';
-import { ElMessage } from 'element-plus';
 
-export const API_BASE_URL = "/minio";
+// 可配置的基础 URL 与通知函数，默认值适配当前项目
+let API_BASE_URL = '/minio';
+let notify = (msg, type = 'error', duration = 5000) => {
+  const prefix = type === 'error' ? '[ERROR]' : type === 'success' ? '[SUCCESS]' : '[INFO]';
+  console.log(prefix, msg);
+};
+
+export function setApiBaseUrl(baseUrl) {
+  API_BASE_URL = baseUrl || API_BASE_URL;
+  apiClient.defaults.baseURL = API_BASE_URL;
+}
+
+export function setNotifier(fn) {
+  if (typeof fn === 'function') notify = fn;
+}
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -24,10 +37,10 @@ const handleError = (error) => {
         const reader = new FileReader();
         reader.onload = () => {
             const errorData = JSON.parse(reader.result);
-            ElMessage({ message: errorData.message || '文件下载失败', type: 'error', duration: 5 * 1000 });
+            notify(errorData.message || '文件下载失败', 'error', 5000);
         };
         reader.onerror = () => {
-            ElMessage({ message: '文件下载失败或文件不存在', type: 'error', duration: 5 * 1000 });
+            notify('文件下载失败或文件不存在', 'error', 5000);
         };
         reader.readAsText(data);
         const apiErr = new Error('文件下载失败');
@@ -70,11 +83,7 @@ const handleError = (error) => {
     message = error.message || '请求发送失败';
   }
 
-  ElMessage({
-    message,
-    type: 'error',
-    duration: 5 * 1000,
-  });
+  notify(message, 'error', 5000);
 
   const apiError = new Error(message);
   if (businessCode) apiError.code = businessCode;
@@ -94,11 +103,7 @@ apiClient.interceptors.response.use(
 
     // 后端统一响应格式为 { code, message, data }
     if (res.code !== 200) {
-      ElMessage({
-        message: res.message || '操作失败',
-        type: 'error',
-        duration: 5 * 1000
-      });
+      notify(res.message || '操作失败', 'error', 5000);
       const apiError = new Error(res.message || 'BusinessError');
       apiError.code = res.code;
       apiError.isBusinessError = true;

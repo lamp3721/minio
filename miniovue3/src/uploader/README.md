@@ -118,3 +118,59 @@ await upload(file);
 
 ---
 如需切换现有组件到通用客户端，可参考上述 Quick Start；若你需要示例 PR，我可以直接为 `FileManagerComponent.vue` 接入并演示。
+
+## 跨框架集成指南（Portable Integration）
+
+- 上传模块对 UI 框架无强依赖。通过 `universalUploader` 提供的 API，可在任意框架或原生页面中使用。
+
+### 基础配置（可选）
+- 设置基础地址：
+  - `import { setApiBaseUrl } from './index'`
+  - `setApiBaseUrl('/minio')` 或者你的网关地址（默认已是 `/minio`）。
+- 注入通知机制：
+  - `import { setNotifier } from './index'`
+  - `setNotifier((message, type = 'error', duration = 5000) => toast(message))`
+  - 你可绑定任意通知库（React Toast、Ant Message、原生 `alert`、仅 `console`）。
+
+### 纯 JavaScript（无框架）示例
+```html
+<input id="fileInput" type="file" />
+<script type="module">
+  import { uploadFile, setApiBaseUrl, setNotifier } from './index.js';
+
+  setApiBaseUrl('/minio');
+  setNotifier((msg, type) => console.log(`[${type}]`, msg));
+
+  const input = document.getElementById('fileInput');
+  input.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const res = await uploadFile(file, {
+      apiPrefix: '/public',
+      folderPath: 'file/',
+      chunkSize: 5 * 1024 * 1024,
+      maxConcurrency: 4,
+    }, {
+      onProgress: (p) => console.log('progress', p),
+      onComplete: () => console.log('done'),
+    });
+    console.log('result', res);
+  });
+</script>
+```
+
+### 任意框架中的使用（示例伪代码）
+- React/Angular/Svelte 等：
+  - 在组件事件中调用：
+  - `const uploader = createUploader({ apiPrefix: '/private', folderPath: 'file' })`
+  - `uploader.onProgress(updateUI).onComplete(showSuccess)`
+  - `await uploader.upload(file)`
+
+### 路径约定与后端接口
+- 前端实际请求路径为：`<baseURL>/<apiPrefix>/upload/...`
+  - 例如 `baseURL='/minio'`、`apiPrefix='/public'` → `/minio/public/upload/init`
+- 上传分片、合并、会话状态均由后端处理；本模块内置重试与会话校验逻辑。
+
+### 常见问题
+- 并发与稳定性：并发建议 2–6，过高可能因网络/后端限速而不稳。
+- 秒传与哈希：默认计算 MD5 用于秒传与会话检索；超大文件可考虑在后端侧做内容匹配与策略优化。
