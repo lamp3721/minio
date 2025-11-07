@@ -110,5 +110,5 @@ public abstract class BaseFileController {
         return R.success("文件删除成功: " + safeFileName);
     }
 
-    public abstract R uploadFile(MultipartFile file, FileUploadDto fileUploadDto);
+    public abstract R<?> uploadFile(MultipartFile file, FileUploadDto fileUploadDto);
 }

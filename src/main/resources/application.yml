@@ -1,6 +1,17 @@
 spring:
   profiles:
     active: dev # dev, prod
+  
+  # Flyway 数据库迁移配置
+  flyway:
+    enabled: true  # 启用 Flyway
+    baseline-on-migrate: true  # 对已有数据库创建基线
+    baseline-version: 0  # 基线版本号
+    locations: classpath:db/migration  # 迁移脚本位置
+    encoding: UTF-8  # 脚本编码
+    validate-on-migrate: true  # 迁移前验证
+    out-of-order: false  # 不允许乱序执行
+    table: flyway_schema_history  # Flyway 元数据表名
 
 
 minio:
