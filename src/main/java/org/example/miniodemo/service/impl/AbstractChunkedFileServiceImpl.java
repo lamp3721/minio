@@ -23,7 +23,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -150,21 +149,44 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
     @Override
     public R<ChunkUploadResponseDto> uploadChunkWithSession(MultipartFile file, String sessionId, Integer chunkNumber) {
         try {
-            // 验证会话
+            // 第一层验证：会话ID必须存在（双重验证，确保安全）
+            if (sessionId == null || sessionId.isBlank()) {
+                log.error("【安全拦截 - {}】企图在没有会话ID的情况下上传分片", getStorageType());
+                return R.error(ResultCode.BAD_REQUEST, "会话ID不能为空，必须先调用/upload/init初始化会话");
+            }
+
+            // 第二层验证：会话必须在数据库中存在
             Optional<ChunkUploadSession> sessionOpt = sessionService.getSession(sessionId);
             if (sessionOpt.isEmpty()) {
-                return R.error(ResultCode.UPLOAD_SESSION_NOT_FOUND, "上传会话不存在");
+                log.warn("【安全拦截 - {}】使用不存在的会话ID尝试上传: {}", getStorageType(), sessionId);
+                return R.error(ResultCode.UPLOAD_SESSION_NOT_FOUND, 
+                    "上传会话不存在或已过期，请重新调用/upload/init初始化会话");
             }
 
+            // 第三层验证：会话状态必须允许上传
             ChunkUploadSession session = sessionOpt.get();
-            if (session.getStatus() == ChunkUploadStatus.MERGED || 
-                session.getStatus() == ChunkUploadStatus.EXPIRED) {
-                return R.error(ResultCode.UPLOAD_SESSION_STATE_MISMATCH, "会话状态不允许上传");
+            if (session.getStatus() == ChunkUploadStatus.MERGED) {
+                log.warn("【安全拦截 - {}】会话已完成合并，不允许继续上传: {}", getStorageType(), sessionId);
+                return R.error(ResultCode.UPLOAD_SESSION_STATE_MISMATCH, "会话已完成，无需再上传分片");
+            }
+            if (session.getStatus() == ChunkUploadStatus.EXPIRED) {
+                log.warn("【安全拦截 - {}】会话已过期: {}", getStorageType(), sessionId);
+                return R.error(ResultCode.UPLOAD_SESSION_STATE_MISMATCH, "会话已过期，请重新初始化");
             }
 
-            // 验证分片编号
+            // 第四层验证：会话存储类型必须匹配
+            if (!session.getStorageType().equals(getStorageType())) {
+                log.error("【安全拦截 - {}】会话存储类型不匹配: 期望={}, 实际={}", 
+                    getStorageType(), getStorageType(), session.getStorageType());
+                return R.error(ResultCode.BAD_REQUEST, "会话存储类型不匹配");
+            }
+
+            // 第五层验证：分片编号必须在合法范围内
             if (chunkNumber < 1 || chunkNumber > session.getTotalChunks()) {
-                return R.error(ResultCode.BAD_REQUEST, "分片编号无效");
+                log.warn("【安全拦截 - {}】分片编号超出范围: {}/{}", 
+                    getStorageType(), chunkNumber, session.getTotalChunks());
+                return R.error(ResultCode.BAD_REQUEST, 
+                    String.format("分片编号无效，必须在1-%d之间", session.getTotalChunks()));
             }
 
             // 上传分片

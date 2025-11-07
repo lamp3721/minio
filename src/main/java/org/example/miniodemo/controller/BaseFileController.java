@@ -56,7 +56,7 @@ public abstract class BaseFileController {
     }
 
     /**
-     * 改进的上传文件分片端点
+     * 改进的上传文件分片端点（强制要求会话ID）
      */
     @PostMapping("/upload/chunk")
     public R<ChunkUploadResponseDto> uploadChunk(
@@ -64,9 +64,32 @@ public abstract class BaseFileController {
             @RequestParam("sessionId") String sessionId,
             @RequestParam("chunkNumber") Integer chunkNumber) {
 
-        if (file.isEmpty() || sessionId.isBlank() || chunkNumber == null) {
-            return R.error(ResultCode.BAD_REQUEST, "文件、会话ID或分片序号不能为空");
+        // 严格验证：文件不能为空
+        if (file == null || file.isEmpty()) {
+            log.warn("【分片上传拦截】文件为空");
+            return R.error(ResultCode.BAD_REQUEST, "文件不能为空");
         }
+
+        // 严格验证：会话ID必须存在且不能为空白字符串
+        if (sessionId == null || sessionId.isBlank()) {
+            log.warn("【分片上传拦截】会话ID为空或无效");
+            return R.error(ResultCode.BAD_REQUEST, "会话ID不能为空，所有上传都必须先通过init接口初始化会话");
+        }
+
+        // 验证：会话ID长度和格式（防止恶意输入）
+        if (sessionId.length() > 100 || sessionId.length() < 10) {
+            log.warn("【分片上传拦截】会话ID长度异常: {}", sessionId.length());
+            return R.error(ResultCode.BAD_REQUEST, "会话ID格式无效");
+        }
+
+        // 验证：分片序号必须存在
+        if (chunkNumber == null || chunkNumber < 1) {
+            log.warn("【分片上传拦截】分片序号无效: {}", chunkNumber);
+            return R.error(ResultCode.BAD_REQUEST, "分片序号必须大于0");
+        }
+
+        log.info("【分片上传请求】会话ID={}, 分片序号={}, 文件大小={}", 
+                sessionId.substring(0, Math.min(8, sessionId.length())), chunkNumber, file.getSize());
 
         return getService().uploadChunkWithSession(file, sessionId, chunkNumber);
     }

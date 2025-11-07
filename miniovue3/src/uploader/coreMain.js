@@ -40,31 +40,31 @@ const shouldRetryMerge = (error) => {
     return false;
 };
 
-// 小文件直接上传
-const directUploadSmallFile = async (file, uploaderConfig, fileHash, CHUNK_SIZE, onProgress, onUploadComplete) => {
-    if (file.size >= CHUNK_SIZE) {
-        return { handled: false };
-    }
-    try {
-        onProgress?.({ percentage: 0, status: '文件较小，正在直接上传...' });
-        const formData = new FormData();
-        formData.append('file', file);
-        const dto = {
-            fileHash: fileHash,
-            folderPath: uploaderConfig.folderPath || ''
-        };
-        formData.append('dto', new Blob([JSON.stringify(dto)], { type: 'application/json' }));
-        const result = await storageService.uploadFile(uploaderConfig, formData);
-        onProgress?.({ percentage: 100, status: '文件上传成功！' });
-        onUploadComplete?.();
-        return { handled: true, result: { isSuccess: true, gracefulResetNeeded: true, fileUrl: result } };
-    } catch (error) {
-        console.error('直接上传失败:', error);
-        onProgress?.({ status: `直接上传失败: ${error.message}` });
-        onUploadComplete?.();
-        return { handled: true, result: { isSuccess: false, error: error.message } };
-    }
-};
+// 小文件直接上传功能已禁用，所有文件都必须通过会话管理流程
+// const directUploadSmallFile = async (file, uploaderConfig, fileHash, CHUNK_SIZE, onProgress, onUploadComplete) => {
+//     if (file.size >= CHUNK_SIZE) {
+//         return { handled: false };
+//     }
+//     try {
+//         onProgress?.({ percentage: 0, status: '文件较小，正在直接上传...' });
+//         const formData = new FormData();
+//         formData.append('file', file);
+//         const dto = {
+//             fileHash: fileHash,
+//             folderPath: uploaderConfig.folderPath || ''
+//         };
+//         formData.append('dto', new Blob([JSON.stringify(dto)], { type: 'application/json' }));
+//         const result = await storageService.uploadFile(uploaderConfig, formData);
+//         onProgress?.({ percentage: 100, status: '文件上传成功！' });
+//         onUploadComplete?.();
+//         return { handled: true, result: { isSuccess: true, gracefulResetNeeded: true, fileUrl: result } };
+//     } catch (error) {
+//         console.error('直接上传失败:', error);
+//         onProgress?.({ status: `直接上传失败: ${error.message}` });
+//         onUploadComplete?.();
+//         return { handled: true, result: { isSuccess: false, error: error.message } };
+//     }
+// };
 
 /**
  * 上传单个分片（带指数退避重试）
@@ -296,8 +296,8 @@ export const handleFileUploadV2 = async (file, uploaderConfig, callbacks = {}) =
         return { isSuccess: false, error: e.message };
     }
 
-    const direct = await directUploadSmallFile(file, uploaderConfig, fileHash, CHUNK_SIZE, onProgress, onUploadComplete);
-    if (direct.handled) return direct.result;
+    // 注意：所有文件（无论大小）都必须通过会话管理流程
+    // 不再使用直接上传小文件的方式
 
     // 步骤 2: 初始化上传会话
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
