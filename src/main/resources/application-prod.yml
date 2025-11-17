@@ -3,13 +3,12 @@ minio:
   # minio后端服务通过此地址与 MinIO 通信，例如上传、下载、生成预签名链接等操作。
   # 好处是走内网速度更快、不消耗公网带宽，也更安全。
   # ⚠️ 注意：这个地址不能直接给前端用户访问，因为外部用户无法访问内网。
-  endpoint: http://minio-server:9000
+  endpoint: http://172.17.0.1:9000
 
   # ✅ MinIO 的公网访问地址（前端/用户访问用）
   # 后端在生成文件访问链接（如预览图、下载链接）时使用此地址拼接，返回给前端用户。
   # 前端或用户通过此地址就可以访问 MinIO 上的资源（前提是桶权限允许访问或通过预签名链接）。
-  public-endpoint: "https://minio.eeccc.cc"
-
+  public-endpoint: https://minio.eeccc.cc
   access-key: admin
   secret-key: 2932349894
 
@@ -18,5 +17,5 @@ spring:
   datasource:
     url: jdbc:mysql://172.17.0.1:3306/minio?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
     username: root
-    password: 2932349894
+    password: 123456
     driver-class-name: com.mysql.cj.jdbc.Driver
