@@ -5,7 +5,7 @@
     <el-card class="box-card">
       <template #header>
         <div class="card-header">
-          <span>{{ title }} (改进版本)</span>
+          <span>{{ title }}</span>
           <el-tag type="success" size="small">基于会话管理</el-tag>
         </div>
       </template>

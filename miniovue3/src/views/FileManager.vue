@@ -4,7 +4,7 @@
       <!-- 私有文件上传 -->
       <el-col :span="12">
         <FileManagerComponent
-          title="私有文件 (改进版)"
+          title="私有文件"
           :uploader-config="privateUploaderConfig"
           :show-visit-count="true"
           actions-width="280"
@@ -20,7 +20,7 @@
       <!-- 公共文件上传 -->
       <el-col :span="12">
         <FileManagerComponent
-          title="公共文件 (改进版)"
+          title="公共文件"
           upload-tip="支持大文件分片上传，基于会话管理，文件将公开访问。"
           :uploader-config="publicUploaderConfig"
         >
