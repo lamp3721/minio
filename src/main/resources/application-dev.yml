@@ -1,5 +1,5 @@
 minio:
-  endpoint:  http://192.168.0.2:9000
+  endpoint:  http://192.168.0.2:900
   public-endpoint: https://minio.eeccc.cc
   access-key: admin
   secret-key: 2932349894

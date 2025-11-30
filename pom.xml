@@ -102,7 +102,7 @@
                     <!-- Docker 主机地址 -->
                     <dockerHost>https://eeccc.cc:2376</dockerHost>
 
-                     <dockerCertPath>C:\Users\29323\.docker\certs</dockerCertPath>
+                     <dockerCertPath>C:\Users\29323\.docker\docker222</dockerCertPath>
 
                     <!-- 镜像名称 -->
                     <imageName>springboot/${project.artifactId}</imageName>
