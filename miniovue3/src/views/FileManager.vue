@@ -148,7 +148,7 @@ const handleDelete = async (row, fetchFileList, type) => {
     });
     
     const apiPrefix = type === 'private' ? '/private' : '/public';
-    await apiClient.delete(`${apiPrefix}/delete`, { params: { filePath: row.filePath } });
+    await apiClient.delete(`${apiPrefix}/delete`, { params: { fileHash: row.contentHash } });
     ElMessage.success('文件删除成功！');
     fetchFileList();
   } catch (error) {

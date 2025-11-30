@@ -1,6 +1,6 @@
 spring:
   profiles:
-    active: prod # dev, prod
+    active: dev # dev, prod
   
   # Flyway 数据库迁移配置
   flyway:

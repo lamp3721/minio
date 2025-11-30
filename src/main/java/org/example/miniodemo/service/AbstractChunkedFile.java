@@ -47,6 +47,13 @@ public interface AbstractChunkedFile {
     void deleteFile(String filePath);
 
     /**
+     * 根据文件哈希值删除文件及其元数据。
+     *
+     * @param fileHash 文件的哈希值
+     */
+    void deleteFileByHash(String fileHash);
+
+    /**
      * 直接上传单个文件，适用于小文件。
      *
      * @param file     上传的文件

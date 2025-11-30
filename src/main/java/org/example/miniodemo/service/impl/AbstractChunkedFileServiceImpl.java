@@ -465,6 +465,40 @@ public abstract class AbstractChunkedFileServiceImpl implements AbstractChunkedF
         }
     }
 
+    /**
+     * 根据文件哈希值删除文件及其元数据。
+     *
+     * @param fileHash 文件的哈希值
+     */
+    @Override
+    @Transactional
+    public void deleteFileByHash(String fileHash) {
+        try {
+            // 1. 根据哈希值查询文件元数据
+            Optional<FileMetadata> metadataOpt = fileMetadataRepository.findByHash(fileHash, getStorageType());
+            if (metadataOpt.isEmpty()) {
+                log.warn("【文件删除 - {}】未找到文件元数据，Hash: {}", getStorageType(), fileHash);
+                throw new BusinessException(ResultCode.NOT_FOUND, "文件不存在");
+            }
+
+            FileMetadata metadata = metadataOpt.get();
+            String filePath = metadata.getFilePath();
+
+            // 2. 从对象存储中删除文件
+            objectStorageService.delete(getBucketName(), filePath);
+
+            // 3. 从数据库中删除元数据
+            fileMetadataRepository.deleteByHash(fileHash, getStorageType());
+            
+            log.info("【文件删除 - {}】成功通过Hash删除文件，Hash: {}, 路径: {}", getStorageType(), fileHash, filePath);
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("【文件删除 - {}】通过Hash删除文件失败，Hash: '{}'", getStorageType(), fileHash, e);
+            throw new BusinessException(ResultCode.FILE_DELETE_FAILED, "文件删除失败", e);
+        }
+    }
+
 
     // --- 私有辅助方法 ---
 

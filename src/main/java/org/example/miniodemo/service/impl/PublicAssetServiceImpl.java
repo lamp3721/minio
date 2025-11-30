@@ -82,6 +82,7 @@ public class PublicAssetServiceImpl extends AbstractChunkedFileServiceImpl imple
                         .size(metadata.getFileSize())
                         .url(getPublicUrl(getBucketName(), metadata.getFilePath()))  // 生成文件的公网访问URL
                         .contentType(metadata.getContentType())
+                        .contentHash(metadata.getContentHash())
                         .build())
                 .collect(Collectors.toList());
     }

@@ -40,4 +40,9 @@ public class FileDetailDto {
      * 文件被访问的次数
      */
     private Integer visitCount;
-} 
+    
+    /**
+     * 文件的内容哈希值（用于唯一标识文件）
+     */
+    private String contentHash;
+}

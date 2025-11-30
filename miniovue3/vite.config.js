@@ -9,7 +9,7 @@ export default defineConfig({
     proxy: {
       // 选项写法
       '/minio': {
-        target: 'https://minio-spring.eeccc.cc/', // 目标后端服务地址
+        target: 'http://172.17.0.1:902', // 目标后端服务地址
         changeOrigin: true, // 需要虚拟主机站点
       },
     }

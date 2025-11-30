@@ -87,6 +87,7 @@ public class PrivateFileServiceImpl extends AbstractChunkedFileServiceImpl imple
                             .size(metadata.getFileSize())
                             .contentType(metadata.getContentType())
                             .visitCount(metadata.getVisitCount())
+                            .contentHash(metadata.getContentHash())
                             .url(url) // URL可能为null
                             .build();
                 })

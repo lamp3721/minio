@@ -3,7 +3,6 @@ package org.example.miniodemo.controller;
 import lombok.extern.slf4j.Slf4j;
 import org.example.miniodemo.common.response.R;
 import org.example.miniodemo.common.response.ResultCode;
-import org.example.miniodemo.common.util.PathValidationUtil;
 import org.example.miniodemo.dto.*;
 import org.example.miniodemo.service.AbstractChunkedFile;
 import org.example.miniodemo.service.ChunkUploadSessionService;
@@ -95,19 +94,18 @@ public abstract class BaseFileController {
     }
 
     /**
-     * 通用的文件删除端点。
+     * 通用的文件删除端点（基于文件Hash）。
      *
-     * @param filePath 需要删除的文件的完整对象路径。
+     * @param fileHash 需要删除的文件的哈希值。
      * @return 包含操作结果的响应体。
      */
     @DeleteMapping("/delete")
-    public R<String> deleteFile(@RequestParam(required = false) String filePath) {
-        if (filePath == null || filePath.isBlank()) {
-            return R.error(ResultCode.BAD_REQUEST, "文件名不能为空");
+    public R<String> deleteFile(@RequestParam(required = false) String fileHash) {
+        if (fileHash == null || fileHash.isBlank()) {
+            return R.error(ResultCode.BAD_REQUEST, "文件Hash不能为空");
         }
-        String safeFileName = PathValidationUtil.clean(filePath);
-        getService().deleteFile(safeFileName);
-        return R.success("文件删除成功: " + safeFileName);
+        getService().deleteFileByHash(fileHash);
+        return R.success("文件删除成功");
     }
 
     public abstract R<?> uploadFile(MultipartFile file, FileUploadDto fileUploadDto);
